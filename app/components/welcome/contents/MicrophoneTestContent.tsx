@@ -119,33 +119,59 @@ export function MicrophoneSelector({
   )
 }
 
-function MicrophoneBars({ volume }: { volume: number }) {
+function MicrophoneBars({ volume }) {
   const minHeight = 0.2
+  const barCount = 17
+  const centerIndex = Math.floor(barCount / 2)
+
   const levels = useMemo(
     () =>
-      Array.from({ length: 17 }).map((_, i) => {
-        const threshold = (i / 17) * 0.5
+      Array.from({ length: barCount }).map((_, i) => {
+        // No changes if volume < 2%
+        if (volume < 0.02) {
+          return minHeight
+        }
+
+        const distanceFromCenter = Math.abs(i - centerIndex) / centerIndex
+        const threshold = distanceFromCenter * 0.5
         const normalizedVolume = Math.min(volume * 8, 1)
+
+        // If volume is very low, only center bar is active
+        if (normalizedVolume > 0 && normalizedVolume <= 0.1) {
+          return i === centerIndex ? 1 : minHeight
+        }
+
         return normalizedVolume > threshold ? 1 : minHeight
       }),
     [volume],
   )
 
+  const heights = useMemo(
+    () =>
+      Array.from({ length: barCount }).map((_, i) => {
+        const distanceFromCenter = Math.abs(i - centerIndex) / centerIndex
+        const maxHeight = 100 * (1 - distanceFromCenter * 0.6)
+        const minBarHeight = 30
+        return Math.floor(
+          Math.random() * (maxHeight - minBarHeight) + minBarHeight,
+        )
+      }),
+    [volume],
+  )
+
   return (
-    <div className="flex gap-2 items-center justify-center h-40.5">
+    <div className="flex gap-2 items-center justify-center h-40">
       {levels.map((level, i) => {
         const isActive = level > minHeight
         return (
           <div
             key={i}
             className={cn(
-              `w-3 min-h-3 rounded-full transition-all`,
+              'w-3 min-h-3 rounded-full transition-all duration-150',
               isActive ? 'bg-primary' : 'bg-muted',
             )}
             style={{
-              height: isActive
-                ? `${Math.floor(Math.random() * 100)}px`
-                : undefined,
+              height: isActive ? `${heights[i]}px` : '12px',
             }}
           />
         )
@@ -211,7 +237,13 @@ export default function MicrophoneTestContent() {
           title="Microphone Test"
           subtitle="Speak — See Bars Move"
           leftSide={<BackButton onClick={decrementOnboardingStep} />}
-          rightSide={<OnboardingStepper title="Permissions" index={1} />}
+          rightSide={
+            <OnboardingStepper
+              shouldAnimate={false}
+              title="Permissions"
+              index={1}
+            />
+          }
         />
         <motion.div
           {...opacityAnimations}

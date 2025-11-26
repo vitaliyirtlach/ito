@@ -298,7 +298,7 @@ export default function KeyboardShortcutEditor({
                 className={cn(
                   isDisplayKeyPressed(String(keyboardKey), pressedKeys) &&
                     'bg-secondary',
-                  'flex size-12 border-foreground border-2 shadow-none text-foreground rounded-lg items-center justify-center',
+                  'flex size-12 [&_*]:font-semibold [&_*]:text-primary border-foreground border-2 shadow-none text-foreground rounded-lg items-center justify-center',
                 )}
               />
             ))}

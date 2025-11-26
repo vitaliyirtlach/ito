@@ -209,29 +209,51 @@ export default function TryItOut() {
           >
             <div className="flex flex-row h-22 relative items-center gap-2 p-6 rounded-4xl bg-muted">
               <div className="absolute -top-5.5 flex items-center justify-center left-0 right-0">
-                <Tooltip>
+                <Tooltip open>
                   <TooltipTrigger>
                     <div className="w-14 h-2.5 rounded-full bg-black/60" />
                   </TooltipTrigger>
-                  <TooltipContent className="max-w-50 rounded-xl text-base text-center font-semibold text-background">
-                    <div>
-                      Hold{' '}
-                      {keyboardShortcut.map((key, idx) => (
-                        <React.Fragment key={`keyboard-shortcut-${idx}`}>
-                          <span className="inline-flex items-center px-2 py-0.5 bg-white/10 rounded text-xs font-mono mx-1 first:ml-0 last:mr-0 font-bold">
-                            {getKeyDisplay(key, platform, {
-                              showDirectionalText: false,
-                              format: 'label',
-                            })}
-                          </span>
-                          {idx < keyboardShortcut.length - 1 && (
-                            <span className="text-muted-foreground"> + </span>
-                          )}
-                        </React.Fragment>
-                      ))}{' '}
-                    </div>
-                    <p>and start speaking</p>
-                    <TooltipArrow className="bg-foreground fill-foreground z-50 size-3 translate-y-[calc(-50%_-_2px)] rotate-45 rounded-[2px]" />
+                  <TooltipContent
+                    className="max-w-50 rounded-xl text-base text-center font-semibold text-background"
+                    asChild
+                  >
+                    <motion.div
+                      className="max-w-50 rounded-xl text-base text-center font-semibold text-background"
+                      initial={{ opacity: 0, y: 8, scale: 0.96 }}
+                      animate={{
+                        opacity: 1,
+                        y: [0, -6, 0],
+                        scale: 1,
+                      }}
+                      transition={{
+                        opacity: { duration: 0.4 },
+                        scale: { duration: 0.4 },
+                        y: {
+                          duration: 2.4,
+                          repeat: Infinity,
+                          ease: 'easeInOut',
+                        },
+                      }}
+                    >
+                      <div>
+                        Hold
+                        {keyboardShortcut.map((key, idx) => (
+                          <React.Fragment key={`keyboard-shortcut-${idx}`}>
+                            <span className="inline-flex items-center px-2 py-0.5 bg-white/10 rounded text-xs font-mono mx-1 first:ml-0 last:mr-0 font-bold">
+                              {getKeyDisplay(key, platform, {
+                                showDirectionalText: false,
+                                format: 'label',
+                              })}
+                            </span>
+                            {idx < keyboardShortcut.length - 1 && (
+                              <span className="text-muted-foreground"> + </span>
+                            )}
+                          </React.Fragment>
+                        ))}{' '}
+                      </div>
+                      <p>and start speaking</p>
+                      <TooltipArrow className="bg-foreground fill-foreground z-50 size-3 translate-y-[calc(-50%_-_2px)] rotate-45 rounded-[2px]" />
+                    </motion.div>
                   </TooltipContent>
                 </Tooltip>
               </div>

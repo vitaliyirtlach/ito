@@ -21,7 +21,9 @@ export default function IntroducingIntelligentMode() {
           title="Voice Shortcuts"
           subtitle="Assign Keys for Voice Control"
           leftSide={<BackButton onClick={decrementOnboardingStep} />}
-          rightSide={<OnboardingStepper title="Setup" index={2} />}
+          rightSide={
+            <OnboardingStepper shouldAnimate={false} title="Setup" index={2} />
+          }
         />
 
         <motion.div {...opacityAnimations} className="flex mt-6 flex-col gap-2">

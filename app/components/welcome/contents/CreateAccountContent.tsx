@@ -238,19 +238,19 @@ export default function CreateAccountContent() {
           scale: 1,
           transition: {
             delay: 1,
-            duration: 1.25,
+            duration: 0.725,
             stiffness: 80,
             damping: 20,
           },
         }}
-        transition={{ duration: 1 }}
+        transition={{ duration: 0.5 }}
       >
         <ItoLogo className="w-35 h-16" />
       </motion.div>
       <motion.div
         initial={{ y: '100%' }}
         animate={{ y: 0 }}
-        transition={{ duration: 1.25, delay: 1 }} // плавное движение
+        transition={{ duration: 0.725, delay: 1 }} // плавное движение
         className="bg-card p-6 rounded-t-3xl w-150"
       >
         <div className="text-center pt-4 font-semibold">

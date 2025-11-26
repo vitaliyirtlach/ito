@@ -21,6 +21,7 @@ import { BackButton } from '../components/BackButton'
 import { OnboardingStepper } from '../components/OnboardingStepper'
 import { AnimatePresence, motion } from 'framer-motion'
 import { mediaAnimations, opacityAnimations } from '../constants/animations'
+import { TooltipArrow } from '@radix-ui/react-tooltip'
 
 interface PermissionBlockProps extends ComponentProps<typeof motion.div> {
   isActive: boolean
@@ -60,12 +61,9 @@ const PermissionBlock = ({
                 <TooltipTrigger asChild>
                   <InfoIcon className="size-4" />
                 </TooltipTrigger>
-                <TooltipContent
-                  className="max-w-60"
-                  sideOffset={8}
-                  side="bottom"
-                >
+                <TooltipContent className="max-w-60" side="bottom">
                   {tooltip}
+                  <TooltipArrow className="bg-foreground fill-foreground z-50 size-3 translate-y-[calc(-50%_-_2px)] rotate-45 rounded-[2px]" />
                 </TooltipContent>
               </Tooltip>
             )}

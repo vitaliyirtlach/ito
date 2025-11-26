@@ -1,13 +1,15 @@
 import { Button } from '@/app/components/ui/button'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '../../ui/dropdown-menu'
-import AvatarIcon from '../../icons/AvatarIcon'
 import { useOnboardingStore } from '@/app/store/useOnboardingStore'
-import { useAuthStore } from '@/app/store/useAuthStore'
+import { OnboardingStepHeader } from '../components/OnboardingStepHeader'
+import { cn } from '@/lib/utils'
+import { HelpCenterButton } from '../components/HelpCenterButton'
+import { TellUsAboutYourselfIcon } from '../../icons/TellUsAboutYourselfIcon'
+import { OnboardingScreenContainer } from '../components/OnboardingScreenContainer'
+import { OnboardingStepCard } from '../components/OnboardingStepCard'
+import { BackButton } from '../components/BackButton'
+import { OnboardingStepper } from '../components/OnboardingStepper'
+import { motion } from 'framer-motion'
+import { mediaAnimations, opacityAnimations } from '../constants/animations'
 
 const sources = [
   'Twitter',
@@ -23,73 +25,67 @@ const sources = [
 ]
 
 export default function ReferralContent() {
-  const { incrementOnboardingStep, referralSource, setReferralSource } =
-    useOnboardingStore()
-  const { user } = useAuthStore()
-  const firstName = user?.name?.split(' ')[0]
+  const {
+    incrementOnboardingStep,
+    referralSource,
+    setReferralSource,
+    decrementOnboardingStep,
+  } = useOnboardingStore()
 
   return (
-    <div className="flex flex-row h-full w-full bg-background">
-      <div className="flex flex-col w-[45%] justify-center items-start pl-24">
-        <div className="flex flex-col h-full min-h-[400px] justify-between py-12">
-          <div className="pt-32">
-            <h1 className="text-3xl mb-4">
-              Welcome{firstName ? `, ${firstName}!` : '!'}
-            </h1>
-            <p className="mb-6 text-base text-muted-foreground">
-              Where did you hear about us?
-            </p>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button className="mb-8 w-48 px-4 py-2 border border-border rounded-md bg-background text-base focus:outline-none text-left flex items-center justify-between">
-                  {referralSource ? (
-                    <span className="text-sm">{referralSource}</span>
-                  ) : (
-                    <span className="text-muted-foreground text-sm">
-                      Select a source
-                    </span>
+    <OnboardingScreenContainer className="pt-12 px-4 pb-4">
+      <OnboardingStepCard>
+        <OnboardingStepHeader
+          title="Let’s Begin"
+          subtitle="Tell Us Where You Found Ito."
+          leftSide={<BackButton onClick={decrementOnboardingStep} />}
+          rightSide={<OnboardingStepper title="Welcome!" index={0} />}
+        />
+        <motion.div
+          {...opacityAnimations}
+          className="rounded-2xl mt-6 w-125 p-6 flex flex-col gap-4 border border-border"
+        >
+          <h3 className="text-lg leading-7 font-medium">Choose a source</h3>
+          <div className="flex flex-wrap gap-2">
+            {sources.map(source => {
+              const isActive = source === referralSource
+              return (
+                <Button
+                  key={source}
+                  className={cn(
+                    'h-9 border cursor-pointer rounded-lg',
+                    isActive
+                      ? 'border-transparent'
+                      : '!bg-background dark:bg-input/30',
                   )}
-                  <svg
-                    className="ml-2 h-4 w-4 text-muted-foreground"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M19 9l-7 7-7-7"
-                    />
-                  </svg>
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-48 text-sm border-border">
-                {sources.map(s => (
-                  <DropdownMenuItem
-                    key={s}
-                    onSelect={() => setReferralSource(s)}
-                  >
-                    {s}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
+                  variant={isActive ? 'default' : 'outline'}
+                  onClick={() => setReferralSource(source)}
+                >
+                  {source}
+                </Button>
+              )
+            })}
           </div>
-          <div className="flex flex-col items-start mb-8">
+        </motion.div>
+        <div className="flex h-10 mt-auto justify-between items-start">
+          <motion.div {...opacityAnimations}>
             <Button
-              className="w-24"
+              className="h-10 rounded-full w-31"
               onClick={incrementOnboardingStep}
               disabled={!referralSource}
             >
               Continue
             </Button>
-          </div>
+          </motion.div>
+          <HelpCenterButton />
         </div>
-      </div>
-      <div className="flex w-[55%] items-center justify-center bg-gradient-to-b from-purple-50/10 to-purple-100 border-l-2 border-purple-100">
-        <AvatarIcon />
-      </div>
-    </div>
+      </OnboardingStepCard>
+      <motion.div
+        {...mediaAnimations}
+        className="flex z-50 justify-center absolute items-center bottom-0 top-0 right-0"
+      >
+        <TellUsAboutYourselfIcon />
+      </motion.div>
+    </OnboardingScreenContainer>
   )
 }

@@ -4,20 +4,23 @@ import ReferralContent from './contents/ReferralContent'
 import DataControlContent from './contents/DataControlContent'
 import PermissionsContent from './contents/PermissionsContent'
 import MicrophoneTestContent from './contents/MicrophoneTestContent'
-import KeyboardTestContext from './contents/KeyboardTestContext'
+import KeyboardTestContent from './contents/KeyboardTestContent'
 import GoodToGoContent from './contents/GoodToGoContent'
 import AnyAppContent from './contents/AnyAppContent'
 import TryItOutContent from './contents/TryItOutContent'
-import { useEffect } from 'react'
-import './styles.css'
+import { CSSProperties, useEffect } from 'react'
 import { usePermissionsStore } from '../../store/usePermissionsStore'
 import { useOnboardingStore } from '@/app/store/useOnboardingStore'
 import { useAuthStore } from '@/app/store/useAuthStore'
 import IntroducingIntelligentModeContent from './contents/IntroducingIntelligentModeContent'
+import { useWindowContext } from '../window/WindowContext'
+import '@fontsource-variable/geist'
+import { AnimatePresence, motion } from 'framer-motion'
 
 export default function WelcomeKit() {
   const { onboardingStep } = useOnboardingStore()
   const { isAuthenticated, user } = useAuthStore()
+  const { setTitlebar } = useWindowContext()
 
   const onboardingStepOrder = [
     CreateAccountContent,
@@ -25,7 +28,7 @@ export default function WelcomeKit() {
     DataControlContent,
     PermissionsContent,
     MicrophoneTestContent,
-    KeyboardTestContext,
+    KeyboardTestContent,
     GoodToGoContent,
     IntroducingIntelligentModeContent,
     AnyAppContent,
@@ -49,22 +52,43 @@ export default function WelcomeKit() {
       })
   }, [setAccessibilityEnabled, setMicrophoneEnabled])
 
-  // Show signin/signup based on whether user has previous auth data
-  if (!isAuthenticated) {
-    if (user) {
-      // Returning user who needs to sign back in
-      return <SignInContent />
-    } else {
-      // New user who needs to create an account
-      return <CreateAccountContent />
+  useEffect(() => {
+    setTitlebar(titlebar => ({ ...titlebar, showTitlebar: false }))
+
+    return () => {
+      setTitlebar(titlebar => ({ ...titlebar, showTitlebar: true }))
     }
+  }, [setTitlebar])
+
+  const style = {
+    '--font-sans': "'Geist Variable', sans-serif",
+  } as CSSProperties
+
+  if (!isAuthenticated && user) {
+    return <SignInContent />
+  }
+
+  if (!isAuthenticated && !user) {
+    return (
+      <div className="w-screen h-screen" style={style}>
+        <CreateAccountContent />
+      </div>
+    )
   }
 
   const CurrentComponent = onboardingStepOrder[onboardingStep]
 
   return (
-    <div className="w-full h-full bg-background">
-      {CurrentComponent ? <CurrentComponent /> : null}
-    </div>
+    <AnimatePresence mode="wait">
+      {CurrentComponent && (
+        <motion.div
+          key={onboardingStep}
+          className="w-screen h-screen"
+          style={style}
+        >
+          <CurrentComponent />
+        </motion.div>
+      )}
+    </AnimatePresence>
   )
 }

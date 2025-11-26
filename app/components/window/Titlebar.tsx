@@ -14,11 +14,10 @@ export const Titlebar = () => {
   const { toggleNavExpanded, setCurrentPage, setSettingsPage, navExpanded } =
     useMainStore()
   const { logoutUser } = useAuth()
-  const wcontext = useWindowContext().window
+  const { window: wcontext, titlebar } = useWindowContext()
   const [showUserDropdown, setShowUserDropdown] = useState(false)
   const [isUpdateAvailable, setIsUpdateAvailable] = useState(false)
   const [isUpdateDownloaded, setUpdateDownloaded] = useState(false)
-
   // Handle clicks outside dropdown to close it
   useEffect(() => {
     const handleClickOutside = () => {
@@ -83,6 +82,10 @@ export const Titlebar = () => {
         borderBottom: 'none',
       }
     : { position: 'relative' as const }
+
+  if (!titlebar.showTitlebar) {
+    return null
+  }
 
   return (
     <div
@@ -272,4 +275,5 @@ export interface TitlebarProps {
   title: string
   titleCentered?: boolean
   icon?: string
+  showTitlebar?: boolean
 }

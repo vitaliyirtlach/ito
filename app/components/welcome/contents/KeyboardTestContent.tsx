@@ -1,24 +1,18 @@
-import { Button } from '@/app/components/ui/button'
 import { useOnboardingStore } from '@/app/store/useOnboardingStore'
-import { CheckCircle } from '@mynaui/icons-react'
-import { ArrowRight } from 'lucide-react'
-import KeyboardShortcutEditor from '../../ui/keyboard-shortcut-editor'
-import { ItoMode } from '@/app/generated/ito_pb'
-import { Tip } from '../../ui/tip'
-import { useSettingsStore } from '@/app/store/useSettingsStore'
+import React from 'react'
 import { OnboardingScreenContainer } from '../components/OnboardingScreenContainer'
 import { OnboardingStepCard } from '../components/OnboardingStepCard'
 import { OnboardingStepHeader } from '../components/OnboardingStepHeader'
 import { BackButton } from '../components/BackButton'
 import { OnboardingStepper } from '../components/OnboardingStepper'
-import { IntelligentModeShortcutEditor } from '../components/IntelligentModeShortcutEditor'
-import { DictateModeShortcutEditor } from '../components/DictateModeShortcutEditor'
 import { HelpCenterButton } from '../components/HelpCenterButton'
-import { SetupVoiceIntelligentModeShortcutIcon } from '../../icons/SetupVoiceIntelligentModeShortcutIcon'
-import { mediaAnimations, opacityAnimations } from '../constants/animations'
+import { SetupVoiceShortcutIcon } from '../../icons/SetupVoiceShortcutIcon'
+import { DictateModeShortcutEditor } from '../components/DictateModeShortcutEditor'
+import { IntelligentModeShortcutEditor } from '../components/IntelligentModeShortcutEditor'
 import { motion } from 'framer-motion'
+import { mediaAnimations, opacityAnimations } from '../constants/animations'
 
-export default function IntroducingIntelligentMode() {
+export default function KeyboardTestContent() {
   const { decrementOnboardingStep } = useOnboardingStore()
 
   return (
@@ -32,8 +26,8 @@ export default function IntroducingIntelligentMode() {
         />
 
         <motion.div {...opacityAnimations} className="flex mt-6 flex-col gap-2">
-          <DictateModeShortcutEditor isEnabled={false} />
-          <IntelligentModeShortcutEditor />
+          <DictateModeShortcutEditor />
+          <IntelligentModeShortcutEditor isEnabled={false} />
         </motion.div>
         <HelpCenterButton className="absolute bottom-6 right-6" />
       </OnboardingStepCard>
@@ -41,7 +35,7 @@ export default function IntroducingIntelligentMode() {
         {...mediaAnimations}
         className="flex z-50 justify-center absolute items-center bottom-0 top-0 right-0"
       >
-        <SetupVoiceIntelligentModeShortcutIcon />
+        <SetupVoiceShortcutIcon />
       </motion.div>
     </OnboardingScreenContainer>
   )

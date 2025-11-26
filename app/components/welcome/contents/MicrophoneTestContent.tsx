@@ -1,35 +1,155 @@
 import { Button } from '@/app/components/ui/button'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useOnboardingStore } from '@/app/store/useOnboardingStore'
 import { useSettingsStore } from '@/app/store/useSettingsStore'
-import { MicrophoneSelector } from '@/app/components/ui/microphone-selector'
+import { HelpCenterButton } from '../components/HelpCenterButton'
+import { OnboardingStepHeader } from '../components/OnboardingStepHeader'
+import { cn } from '@/lib/utils'
+import {
+  CheckIcon,
+  ChevronDownIcon,
+  ChevronUpIcon,
+  MicIcon,
+} from 'lucide-react'
+import {
+  getAvailableMicrophones,
+  microphoneToRender,
+  Microphone,
+} from '@/app/media/microphone'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '../../ui/dropdown-menu'
+import { OnboardingScreenContainer } from '../components/OnboardingScreenContainer'
+import { OnboardingStepCard } from '../components/OnboardingStepCard'
+import { MicrophoneTestIcon } from '../../icons/MicrophoneTestIcon'
+import { BackButton } from '../components/BackButton'
+import { OnboardingStepper } from '../components/OnboardingStepper'
+import { mediaAnimations, opacityAnimations } from '../constants/animations'
+import { motion } from 'framer-motion'
+
+interface MicrophoneSelectorProps {
+  selectedDeviceId?: string
+  selectedMicrophoneName?: string
+  onSelectionChange: (deviceId: string, name: string) => void
+  isOpen: boolean
+  setOpen: (isOpen: boolean) => void
+}
+
+export function MicrophoneSelector({
+  selectedDeviceId,
+  selectedMicrophoneName,
+  onSelectionChange,
+  isOpen,
+  setOpen,
+}: MicrophoneSelectorProps) {
+  const [availableMicrophones, setAvailableMicrophones] = useState<
+    Microphone[]
+  >([])
+
+  useEffect(() => {
+    const loadMicrophones = async () => {
+      try {
+        const mics = await getAvailableMicrophones()
+        setAvailableMicrophones(mics)
+      } catch (error) {
+        console.error('Failed to load microphones:', error)
+      }
+    }
+    // Only load microphones when the dialog is opened
+    loadMicrophones()
+  }, [])
+
+  // Use saved microphone name if available, otherwise fallback to looking it up
+  const selectedMicrophoneDisplay =
+    selectedMicrophoneName ||
+    (() => {
+      const foundMicrophone = availableMicrophones.find(
+        mic => mic.deviceId === selectedDeviceId,
+      )
+      return foundMicrophone
+        ? microphoneToRender(foundMicrophone).title
+        : 'Auto-detect'
+    })()
+
+  const RightIcon = isOpen ? ChevronUpIcon : ChevronDownIcon
+
+  return (
+    <DropdownMenu open={isOpen} onOpenChange={setOpen}>
+      <DropdownMenuTrigger className="outline-none">
+        <Button
+          variant="outline"
+          className="!bg-background font-normal w-full justify-between"
+          type="button"
+          onClick={() => setOpen(true)}
+        >
+          <div className="flex items-center gap-2">
+            <MicIcon className="text-muted-foreground" />
+            {selectedMicrophoneDisplay || 'Select Microphone'}
+          </div>
+          <RightIcon className="text-muted-foreground" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent className="border-border w-[var(--radix-dropdown-menu-trigger-width)]">
+        {availableMicrophones.map(mic => {
+          const { title, description } = microphoneToRender(mic)
+          const isSelected = selectedDeviceId === mic.deviceId
+
+          return (
+            <DropdownMenuItem
+              key={mic.deviceId}
+              onClick={() => onSelectionChange(mic.deviceId, mic.label)}
+            >
+              <div className="flex w-full justify-between items-center">
+                <p className="truncate">{title}</p>
+                {isSelected && <CheckIcon />}
+              </div>
+              {description && (
+                <p className="text-muted-foreground text-wrap mt-2 max-w-full">
+                  {description}
+                </p>
+              )}
+            </DropdownMenuItem>
+          )
+        })}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
 
 function MicrophoneBars({ volume }: { volume: number }) {
   const minHeight = 0.2
-  const levels = Array(12)
-    .fill(0)
-    .map((_, i) => {
-      const threshold = (i / 12) * 0.5
-      const normalizedVolume = Math.min(volume * 8, 1)
-      return normalizedVolume > threshold ? 1 : minHeight
-    })
+  const levels = useMemo(
+    () =>
+      Array.from({ length: 17 }).map((_, i) => {
+        const threshold = (i / 17) * 0.5
+        const normalizedVolume = Math.min(volume * 8, 1)
+        return normalizedVolume > threshold ? 1 : minHeight
+      }),
+    [volume],
+  )
 
   return (
-    <div
-      className="flex gap-1 py-4 px-4 items-end bg-neutral-100 rounded-md"
-      style={{ height: 120 }}
-    >
-      {levels.map((level, i) => (
-        <div
-          key={i}
-          className={`mx-2 h-full ${level > minHeight ? 'bg-purple-300' : 'bg-neutral-300'}`}
-          style={{
-            width: 18,
-            borderRadius: 6,
-            transition: 'height 0.18s cubic-bezier(.4,2,.6,1)',
-          }}
-        />
-      ))}
+    <div className="flex gap-2 items-center justify-center h-40.5">
+      {levels.map((level, i) => {
+        const isActive = level > minHeight
+        return (
+          <div
+            key={i}
+            className={cn(
+              `w-3 min-h-3 rounded-full transition-all`,
+              isActive ? 'bg-primary' : 'bg-muted',
+            )}
+            style={{
+              height: isActive
+                ? `${Math.floor(Math.random() * 100)}px`
+                : undefined,
+            }}
+          />
+        )
+      })}
     </div>
   )
 }
@@ -39,7 +159,7 @@ export default function MicrophoneTestContent() {
     useOnboardingStore()
   const { microphoneDeviceId, microphoneName, setMicrophoneDeviceId } =
     useSettingsStore()
-
+  const [isOpen, setOpen] = useState(false)
   const [volume, setVolume] = useState(0)
   const [smoothedVolume, setSmoothedVolume] = useState(0)
 
@@ -85,55 +205,65 @@ export default function MicrophoneTestContent() {
   }
 
   return (
-    <div className="flex flex-row h-full w-full bg-background">
-      <div className="flex flex-col w-[45%] justify-center items-start px-24">
-        <div className="flex flex-col h-full min-h-[400px] justify-between py-12 overflow-hidden">
-          <div className="mt-8">
-            <button
-              className="mb-4 text-sm text-muted-foreground hover:underline"
-              type="button"
-              onClick={decrementOnboardingStep}
-            >
-              &lt; Back
-            </button>
-            <h1 className="text-3xl mb-4 mt-12">
-              Speak to test your microphone.
-            </h1>
-            <div className="text-base text-muted-foreground mb-8 max-w-md">
-              Your computer's built-in mic will ensure accurate transcription
-              with minimal latency.
-            </div>
-          </div>
-        </div>
-      </div>
-      <div className="flex w-[55%] items-center justify-center bg-gradient-to-b from-purple-50/10 to-purple-100 border-l-2 border-purple-100">
-        <div
-          className="bg-white rounded-xl shadow-lg p-6 flex flex-col items-center"
-          style={{ minWidth: 500, maxHeight: 280 }}
+    <OnboardingScreenContainer className="pt-12 px-4 pb-4">
+      <OnboardingStepCard>
+        <OnboardingStepHeader
+          title="Microphone Test"
+          subtitle="Speak — See Bars Move"
+          leftSide={<BackButton onClick={decrementOnboardingStep} />}
+          rightSide={<OnboardingStepper title="Permissions" index={1} />}
+        />
+        <motion.div
+          {...opacityAnimations}
+          className="flex mt-6 flex-col gap-4 border border-input p-6 w-140 rounded-2xl transition-colors"
         >
-          <div className="text-lg font-medium mb-6 text-center">
-            Do you see purple bars moving while you speak?
-          </div>
+          <h3 className="text-lg font-medium">
+            Do the bars move when you speak?
+          </h3>
+          <MicrophoneSelector
+            isOpen={isOpen}
+            setOpen={setOpen}
+            selectedDeviceId={microphoneDeviceId}
+            selectedMicrophoneName={microphoneName}
+            onSelectionChange={handleMicrophoneChange}
+          />
           <MicrophoneBars volume={smoothedVolume} />
-          <div className="flex gap-2 mt-6 w-full justify-end">
-            <MicrophoneSelector
-              selectedDeviceId={microphoneDeviceId}
-              selectedMicrophoneName={microphoneName}
-              onSelectionChange={handleMicrophoneChange}
-              triggerButtonText="No, change microphone"
-              triggerButtonVariant="outline"
-              triggerButtonClassName="w-44"
-            />
+          <div className="w-full h-px bg-border" />
+          <div className="flex items-center justify-center gap-2">
+            <div className="flex text-background items-center justify-center bg-primary rounded-full size-5">
+              <CheckIcon className="size-3 stroke-3" />
+            </div>
+            Microphone detected
+          </div>
+        </motion.div>
+        <div className="flex h-10 mt-auto justify-between items-start">
+          <motion.div
+            {...opacityAnimations}
+            className="flex items-center gap-2"
+          >
             <Button
-              className="w-16"
-              type="button"
+              className="h-10 rounded-full w-38"
               onClick={incrementOnboardingStep}
             >
-              Yes
+              Yes, continue
             </Button>
-          </div>
+            <Button
+              variant="outline"
+              onClick={() => setOpen(true)}
+              className="h-10 rounded-full w-54 !bg-background"
+            >
+              No, change microphone
+            </Button>
+          </motion.div>
+          <HelpCenterButton />
         </div>
-      </div>
-    </div>
+      </OnboardingStepCard>
+      <motion.div
+        {...mediaAnimations}
+        className="flex z-50 justify-center absolute items-center bottom-0 top-0 right-0"
+      >
+        <MicrophoneTestIcon />
+      </motion.div>
+    </OnboardingScreenContainer>
   )
 }

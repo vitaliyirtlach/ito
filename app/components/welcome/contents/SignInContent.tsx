@@ -114,7 +114,6 @@ export default function SignInContent() {
   const { clearAuth } = useAuthStore()
   const { loadNotes } = useNotesStore()
   const { loadEntries } = useDictionaryStore()
-  const { resetOnboarding } = useOnboardingStore()
   const [isServerHealthy, setIsServerHealthy] = useState(true)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')

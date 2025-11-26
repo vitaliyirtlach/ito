@@ -4,9 +4,9 @@ import { XIcon } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
 
-function Dialog({
-  ...props
-}: React.ComponentProps<typeof DialogPrimitive.Root>) {
+export type DialogProps = React.ComponentProps<typeof DialogPrimitive.Root>
+
+function Dialog(props: DialogProps) {
   return <DialogPrimitive.Root data-slot="dialog" {...props} />
 }
 
@@ -108,7 +108,10 @@ function DialogTitle({
   return (
     <DialogPrimitive.Title
       data-slot="dialog-title"
-      className={cn('text-lg leading-none font-semibold', className)}
+      className={cn(
+        'text-lg leading-none font-semibold text-foreground',
+        className,
+      )}
       {...props}
     />
   )

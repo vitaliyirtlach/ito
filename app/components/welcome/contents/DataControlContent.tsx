@@ -1,8 +1,54 @@
 import { Button } from '@/app/components/ui/button'
-import { CheckCircle, Lock } from '@mynaui/icons-react'
 import { EXTERNAL_LINKS } from '@/lib/constants/external-links'
 import { useOnboardingStore } from '@/app/store/useOnboardingStore'
 import { useSettingsStore } from '@/app/store/useSettingsStore'
+import { HelpCenterButton } from '../components/HelpCenterButton'
+import { OnboardingStepHeader } from '../components/OnboardingStepHeader'
+import { ComponentProps } from 'react'
+import { cn } from '@/lib/utils'
+import { CheckIcon } from 'lucide-react'
+import { OnboardingScreenContainer } from '../components/OnboardingScreenContainer'
+import { OnboardingStepCard } from '../components/OnboardingStepCard'
+import { DataControlLockIcon } from '../../icons/DataControlLockIcon'
+import { BackButton } from '../components/BackButton'
+import { OnboardingStepper } from '../components/OnboardingStepper'
+import { motion } from 'framer-motion'
+import { mediaAnimations, opacityAnimations } from '../constants/animations'
+
+interface ManageBlockProps extends ComponentProps<'div'> {
+  isActive: boolean
+  title: string
+  description: string
+}
+
+const ManageBlock = ({
+  isActive,
+  title,
+  description,
+  className,
+  ...props
+}: ManageBlockProps) => {
+  return (
+    <div
+      className={cn(
+        `border flex flex-col border-input p-6 w-125 rounded-2xl cursor-pointer transition-colors`,
+        isActive && 'border-2 border-foreground',
+        className,
+      )}
+      {...props}
+    >
+      <div className="flex items-center justify-between w-full">
+        <div className="font-medium text-lg leading-7">{title}</div>
+        {isActive && (
+          <div className="rounded-full flex items-center justify-center bg-foreground size-6">
+            <CheckIcon className="size-3.5 stroke-3 text-background" />
+          </div>
+        )}
+      </div>
+      <div className="text-sm text-muted-foreground">{description}</div>
+    </div>
+  )
+}
 
 export default function DataControlContent() {
   const { incrementOnboardingStep, decrementOnboardingStep } =
@@ -10,84 +56,61 @@ export default function DataControlContent() {
   const { shareAnalytics, setShareAnalytics } = useSettingsStore()
 
   return (
-    <div className="flex flex-row h-full w-full bg-background">
-      <div className="flex flex-col w-[45%] justify-center items-start pl-24">
-        <div className="flex flex-col h-full min-h-[400px] justify-between py-12">
-          <div className="mt-8">
+    <OnboardingScreenContainer className="pt-12 px-4 pb-4">
+      <OnboardingStepCard>
+        <OnboardingStepHeader
+          title="Manage Your Data"
+          subtitle="Share or Stay Private"
+          leftSide={<BackButton onClick={decrementOnboardingStep} />}
+          rightSide={<OnboardingStepper title="Welcome!" index={0} />}
+        />
+
+        <motion.div {...opacityAnimations} className="flex mt-6 flex-col gap-4">
+          <ManageBlock
+            isActive={shareAnalytics}
+            title="Help improve Ito"
+            description="Share audio, transcripts, and edits to improve Ito’s features and AI models."
+            onClick={() => setShareAnalytics(true)}
+          />
+          <ManageBlock
+            isActive={!shareAnalytics}
+            title="Enable Privacy Mode"
+            description="Keep your data private and unused."
+            onClick={() => setShareAnalytics(false)}
+          />
+          <div className="text-sm text-muted-foreground">
+            You can change this anytime in Settings.{' '}
             <button
-              className="mb-4 text-sm text-muted-foreground hover:underline"
-              type="button"
-              onClick={decrementOnboardingStep}
+              onClick={() =>
+                window.api?.invoke(
+                  'web-open-url',
+                  EXTERNAL_LINKS.PRIVACY_POLICY,
+                )
+              }
+              className="underline cursor-pointer"
             >
-              &lt; Back
+              Read more.
             </button>
-            <h1 className="text-3xl mb-4 mt-12">You control your data.</h1>
-            <div className="flex flex-col gap-4 my-8 pr-24">
-              <div
-                className={`border rounded-lg p-4 cursor-pointer transition-all ${shareAnalytics ? 'border-green-200 bg-green-50 border-2' : 'border-border border-2 bg-background'}`}
-                onClick={() => setShareAnalytics(true)}
-              >
-                <div className="flex items-center justify-between w-full mb-2">
-                  <div className="font-medium">Help improve Ito</div>
-                  {shareAnalytics && (
-                    <div>
-                      <CheckCircle
-                        style={{ color: '#22c55e', width: 18, height: 18 }}
-                      />
-                    </div>
-                  )}
-                </div>
-                <div className="text-sm text-muted-foreground max-w-md mt-1">
-                  To make Ito better, this option lets us collect your audio,
-                  transcript, and edits to evaluate, train and improve Ito's
-                  features and AI models.
-                </div>
-              </div>
-              <div
-                className={`border rounded-lg p-4 cursor-pointer transition-all ${!shareAnalytics ? 'border-purple-200 bg-purple-50 border-2' : 'border-border border-2 bg-background'}`}
-                onClick={() => setShareAnalytics(false)}
-              >
-                <div className="flex items-center justify-between w-full mb-2">
-                  <div className="font-medium">Privacy Mode</div>
-                  {!shareAnalytics && (
-                    <div>
-                      <Lock
-                        style={{ color: '#a78bfa', width: 18, height: 18 }}
-                      />
-                    </div>
-                  )}
-                </div>
-                <div className="text-muted-foreground max-w-md mt-1">
-                  If you enable Privacy Mode, none of your dictation data will
-                  be stored or used for model training by us or any third party.
-                </div>
-              </div>
-            </div>
-            <div className="text-sm text-muted-foreground">
-              You can always change this later in settings.{' '}
-              <button
-                onClick={() =>
-                  window.api?.invoke(
-                    'web-open-url',
-                    EXTERNAL_LINKS.PRIVACY_POLICY,
-                  )
-                }
-                className="underline hover:text-foreground cursor-pointer"
-              >
-                Read more here.
-              </button>
-            </div>
           </div>
-          <div className="flex flex-col items-start mb-8">
-            <Button className="w-24" onClick={incrementOnboardingStep}>
+        </motion.div>
+        <div className="flex h-10 mt-auto justify-between items-start">
+          <motion.div {...opacityAnimations}>
+            <Button
+              className="h-10 rounded-full w-31"
+              onClick={incrementOnboardingStep}
+            >
               Continue
             </Button>
-          </div>
+          </motion.div>
+          <HelpCenterButton />
         </div>
-      </div>
-      <div className="flex w-[55%] items-center justify-center bg-gradient-to-b from-purple-50/10 to-purple-100 border-l-2 border-purple-100">
-        <Lock style={{ width: 220, height: 220, color: '#c4b5fd' }} />
-      </div>
-    </div>
+      </OnboardingStepCard>
+      <motion.div
+        {...mediaAnimations}
+        className="flex z-50 justify-center absolute items-center bottom-0 top-0 right-0"
+      >
+        <DataControlLockIcon />
+      </motion.div>
+    </OnboardingScreenContainer>
   )
 }

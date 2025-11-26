@@ -4,24 +4,78 @@ import {
   DialogContent,
   DialogDescription,
   DialogHeader,
+  DialogProps,
   DialogTitle,
 } from '@/app/components/ui/dialog'
 import { useOnboardingStore } from '@/app/store/useOnboardingStore'
 import EmailSignupContent from './EmailSignupContent'
 import EmailLoginContent from './EmailLoginContent'
 import CheckEmailContent from './CheckEmailContent'
-import ItoIcon from '../../icons/ItoIcon'
-import UserCog from '@/app/assets/icons/UserCog.svg'
-import GoogleIcon from '../../icons/GoogleIcon'
-import AppleIcon from '../../icons/AppleIcon'
-import GitHubIcon from '../../icons/GitHubIcon'
-import MicrosoftIcon from '../../icons/MicrosoftIcon'
 import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../../auth/useAuth'
 import { checkLocalServerHealth } from '@/app/utils/healthCheck'
 import { useDictionaryStore } from '@/app/store/useDictionaryStore'
 import { EXTERNAL_LINKS } from '@/lib/constants/external-links'
 import { isValidEmail } from '@/app/utils/utils'
+import { cn } from '@/lib/utils'
+import { motion } from 'framer-motion'
+import { ItoLogo } from '../../icons/ItoLogo'
+import { OnboardingScreenContainer } from '../components/OnboardingScreenContainer'
+import { FileTextIcon, GithubIcon, ServerIcon, UserCogIcon } from 'lucide-react'
+import { OAuthButton } from '../components/OAuthButton'
+import { GoogleOAuthButton } from '../components/GoogleOAuthButton'
+import { MicrosoftOAuthButton } from '../components/MicrosoftOAuthButton'
+import { AppleOAuthButton } from '../components/AppleOAuthButton'
+import { GitHubOAuthButton } from '../components/GitHubOAuthButton'
+
+const SelfHostedDialog = (props: Omit<DialogProps, 'children'>) => {
+  return (
+    <Dialog {...props}>
+      <DialogContent
+        showCloseButton
+        onOpenAutoFocus={event => event.preventDefault()}
+        className="border font-sans outline-none sm:max-w-md border-border rounded-lg bg-background p-6"
+      >
+        <div className="size-12 shadow-xs border border-border flex items-center justify-center bg-card rounded-md">
+          <ServerIcon className="size-6" />
+        </div>
+        <DialogHeader className="gap-1.5">
+          <DialogTitle>Self-Hosted</DialogTitle>
+          <DialogDescription>
+            Local server must be running to use self-hosted option
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="border border-input rounded-2xl p-6">
+          <p className="text-sm text-foreground">
+            Running Ito locally requires additional setup. Please refer to our
+            Github and Documentation
+          </p>
+          <div className="mt-4 flex w-full gap-4">
+            <Button
+              variant="outline"
+              className="h-10 rounded-full !px-4 !bg-background border-border"
+            >
+              <GithubIcon />
+              <a href={EXTERNAL_LINKS.GITHUB} target="_blank" rel="noreferrer">
+                Github
+              </a>
+            </Button>
+            <Button
+              variant="outline"
+              className="h-10 rounded-full !px-4 !bg-background border-border"
+            >
+              <FileTextIcon />
+              <a href={EXTERNAL_LINKS.WEBSITE} target="_blank" rel="noreferrer">
+                Documentation
+              </a>
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
 
 export default function CreateAccountContent() {
   const { incrementOnboardingStep, initializeOnboarding } = useOnboardingStore()
@@ -39,16 +93,8 @@ export default function CreateAccountContent() {
   const [isCheckingEmail, setIsCheckingEmail] = useState(false)
   const [checkError, setCheckError] = useState<string | null>(null)
 
-  const {
-    user,
-    isAuthenticated,
-    loginWithGoogle,
-    loginWithMicrosoft,
-    loginWithApple,
-    loginWithGitHub,
-    loginWithSelfHosted,
-    signupWithEmail,
-  } = useAuth()
+  const { user, isAuthenticated, loginWithSelfHosted, signupWithEmail } =
+    useAuth()
   const userName = user?.name
 
   const addEntry = useDictionaryStore(state => state.addEntry)
@@ -105,29 +151,6 @@ export default function CreateAccountContent() {
       return
     }
     await handleSelfHosted()
-  }
-
-  const handleSocialAuth = async (provider: string) => {
-    try {
-      switch (provider) {
-        case 'google':
-          await loginWithGoogle()
-          break
-        case 'microsoft':
-          await loginWithMicrosoft()
-          break
-        case 'apple':
-          await loginWithApple()
-          break
-        case 'github':
-          await loginWithGitHub()
-          break
-        default:
-          console.error('Unknown auth provider:', provider)
-      }
-    } catch (error) {
-      console.error(`${provider} authentication failed:`, error)
-    }
   }
 
   const handleContinueWithEmail = async () => {
@@ -196,187 +219,132 @@ export default function CreateAccountContent() {
   const emailOk = isValidEmail(email)
 
   return (
-    <div className="flex flex-col h-full w-full bg-background items-center justify-center">
-      <div className="relative flex flex-col items-center w-full h-full max-h-full px-8 py-16 mt-12 mb-12">
-        {/* Logo */}
-        <div className="mb-4 bg-black rounded-md p-2 w-10 h-10">
-          <ItoIcon height={24} width={24} style={{ color: '#FFFFFF' }} />
-        </div>
-
-        {/* Title and subtitle */}
-        <div className="text-center mb-10">
-          <h1 className="text-3xl font-semibold mb-3 text-foreground">
-            Get started with Ito
+    <OnboardingScreenContainer className="flex-col justify-end items-center">
+      <motion.div
+        className="absolute flex justify-center h-16"
+        initial={{
+          top: '50%',
+          left: '50%',
+          x: '-50%',
+          y: '-50%',
+          scale: 2,
+          opacity: 1,
+        }}
+        animate={{
+          top: '40px',
+          left: '50%',
+          x: '-50%',
+          y: 0,
+          scale: 1,
+          transition: {
+            delay: 1,
+            duration: 1.25,
+            stiffness: 80,
+            damping: 20,
+          },
+        }}
+        transition={{ duration: 1 }}
+      >
+        <ItoLogo className="w-35 h-16" />
+      </motion.div>
+      <motion.div
+        initial={{ y: '100%' }}
+        animate={{ y: 0 }}
+        transition={{ duration: 1.25, delay: 1 }} // плавное движение
+        className="bg-card p-6 rounded-t-3xl w-150"
+      >
+        <div className="text-center pt-4 font-semibold">
+          <h1 className="text-4xl leading-9 text-foreground">
+            VibeType Anywhere
           </h1>
-          <p className="text-muted-foreground text-base">
-            Smart dictation. Everywhere you want.
-          </p>
+          <p className="text-ring mt-2 text-2xl">Say it, Send it</p>
         </div>
 
-        {/* Social auth buttons */}
-        <div className="w-1/2 space-y-3 mb-6">
-          <div className="grid grid-cols-2 gap-3">
-            <Button
-              variant="outline"
-              className="w-full h-12 flex items-center justify-start gap-3 text-sm font-medium"
-              onClick={() => handleSocialAuth('google')}
-            >
-              <GoogleIcon className="size-5" />
-              <div className="w-full text-sm font-medium">
-                Continue with Google
-              </div>
-            </Button>
-
-            <Button
-              variant="outline"
-              className="w-full h-12 flex items-center justify-start gap-3 text-sm font-medium"
-              onClick={() => handleSocialAuth('microsoft')}
-            >
-              <MicrosoftIcon className="size-5" />
-              <div className="w-full text-sm font-medium">
-                Continue with Microsoft
-              </div>
-            </Button>
+        <div className="w-75 pb-5 mt-12 flex flex-col gap-6 mx-auto">
+          <div className="flex flex-col gap-4">
+            <div className="text-center text-xs text-muted-foreground">
+              Continue with
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <GoogleOAuthButton />
+              <MicrosoftOAuthButton />
+              <AppleOAuthButton />
+              <GitHubOAuthButton />
+            </div>
           </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <Button
-              variant="outline"
-              className="h-12 flex items-center justify-start gap-2 text-sm font-medium"
-              onClick={() => handleSocialAuth('apple')}
-            >
-              <AppleIcon className="size-5" />
-              <div className="w-full text-sm font-medium">
-                Continue with Apple
-              </div>
-            </Button>
-
-            <Button
-              variant="outline"
-              className="h-12 flex items-center justify-start gap-2 text-sm font-medium"
-              onClick={() => handleSocialAuth('github')}
-            >
-              <GitHubIcon className="size-5" />
-              <div className="w-full text-sm font-medium">
-                Continue with GitHub
-              </div>
-            </Button>
+          <div className="flex items-center">
+            <div className="flex-1 border-t border-border"></div>
+            <span className="px-4 text-xs text-muted-foreground">or</span>
+            <div className="flex-1 border-t border-border"></div>
           </div>
-        </div>
-
-        {/* Divider */}
-        <div className="w-1/2 flex items-center my-6">
-          <div className="flex-1 border-t border-border"></div>
-          <span className="px-4 text-xs text-muted-foreground">OR</span>
-          <div className="flex-1 border-t border-border"></div>
-        </div>
-
-        {/* Email sign up */}
-        <div className="w-1/2 space-y-3 mb-6">
-          <input
-            type="email"
-            placeholder="Email address"
-            onChange={e => setEmail(e.target.value)}
-            onBlur={() => setEmailTouched(true)}
-            onKeyDown={e => {
-              if (e.key === 'Enter') {
-                e.preventDefault()
-                handleContinueWithEmail()
+          <div className="flex flex-col gap-3">
+            <input
+              type="email"
+              placeholder="Type your email"
+              onChange={e => setEmail(e.target.value)}
+              onBlur={() => setEmailTouched(true)}
+              onKeyDown={e => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  handleContinueWithEmail()
+                }
+              }}
+              aria-invalid={emailTouched && !emailOk}
+              aria-describedby={
+                emailTouched && !emailOk ? 'signup-email-error' : undefined
               }
-            }}
-            aria-invalid={emailTouched && !emailOk}
-            aria-describedby={
-              emailTouched && !emailOk ? 'signup-email-error' : undefined
-            }
-            className={`w-full h-12 px-3 rounded-md border bg-background text-foreground placeholder:text-muted-foreground ${
-              emailTouched && !emailOk ? 'border-destructive' : 'border-border'
-            }`}
-          />
-          {emailTouched && !emailOk && (
-            <p id="signup-email-error" className="text-xs text-destructive">
-              Please enter a valid email address
-            </p>
-          )}
-          <Button
-            className="w-full h-12 text-sm font-medium"
-            disabled={!emailOk || isCheckingEmail}
-            aria-busy={isCheckingEmail}
-            onClick={handleContinueWithEmail}
+              className={cn(
+                `w-full h-9 px-3 rounded-lg shadow-xs border bg-background text-foreground placeholder:text-muted-foreground outline-primary`,
+                emailTouched && !emailOk
+                  ? 'border-destructive'
+                  : 'border-border',
+              )}
+            />
+            {emailTouched && !emailOk && (
+              <p id="signup-email-error" className="text-xs text-destructive">
+                Please enter a valid email address
+              </p>
+            )}
+            <Button
+              className="w-full rounded-full h-9 text-sm font-medium"
+              disabled={!emailOk || isCheckingEmail}
+              aria-busy={isCheckingEmail}
+              onClick={handleContinueWithEmail}
+            >
+              {isCheckingEmail ? 'Checking…' : 'Continue'}
+            </Button>
+            {checkError && (
+              <p className="text-xs text-destructive">{checkError}</p>
+            )}
+            <OAuthButton
+              className="border-0 !bg-card"
+              variant="ghost"
+              onClick={onClickSelfHosted}
+            >
+              <UserCogIcon className="size-4" />
+              <span className="text-sm">Self-Hosted</span>
+            </OAuthButton>
+          </div>
+        </div>
+        <div className="mt-6 text-center text-muted-foreground">
+          <a href={EXTERNAL_LINKS.WEBSITE} target="_blank" rel="noreferrer">
+            Terms of Use
+          </a>
+          <span className="mx-2">•</span>
+          <a
+            href={EXTERNAL_LINKS.PRIVACY_POLICY}
+            target="_blank"
+            rel="noreferrer"
           >
-            {isCheckingEmail ? 'Checking…' : 'Continue with email'}
-          </Button>
-          {checkError && (
-            <p className="text-xs text-destructive">{checkError}</p>
-          )}
+            Privacy Policy
+          </a>
         </div>
 
-        {/* Self-hosted option (icon + label in a row, pinned near bottom) */}
-        <div className="absolute bottom-0 left-1/2 -translate-x-1/2 flex items-center justify-center">
-          <button
-            type="button"
-            onClick={onClickSelfHosted}
-            className="flex flex-row items-center gap-2 hover:text-muted-foreground"
-          >
-            <img src={UserCog} alt="User settings" className="h-4 w-4" />
-            <span className="text-sm">Self-Hosted</span>
-          </button>
-        </div>
-
-        {/* Self-hosted modal */}
-        <Dialog
+        <SelfHostedDialog
           open={isSelfHostedModalOpen}
           onOpenChange={setIsSelfHostedModalOpen}
-        >
-          <DialogContent
-            showCloseButton={false}
-            className="w-[90vw] max-w-[600px] rounded-md border-0 bg-white p-6"
-          >
-            <DialogHeader className="mb-2 text-left">
-              <DialogTitle className="text-[18px] leading-6 font-semibold text-black">
-                Self-Hosted
-              </DialogTitle>
-              <DialogDescription className="text-sm leading-5 text-black">
-                Local server must be running to use self-hosted option
-              </DialogDescription>
-            </DialogHeader>
-
-            <div className="rounded-md bg-[#F5F5F5] p-4">
-              <p className="text-sm font-medium leading-5 text-black">
-                Running Ito locally requires additional setup. Please refer to
-                our Github and Documentation
-              </p>
-              <div className="mt-4 flex w-full gap-4">
-                <Button
-                  variant="outline"
-                  asChild
-                  className="h-10 flex-1 basis-1/2 justify-center rounded border border-black text-sm font-medium text-black"
-                >
-                  <a
-                    href={EXTERNAL_LINKS.GITHUB}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    Github
-                  </a>
-                </Button>
-                <Button
-                  variant="outline"
-                  asChild
-                  className="h-10 flex-1 basis-1/2 justify-center rounded border border-black text-base font-medium text-black"
-                >
-                  <a
-                    href={EXTERNAL_LINKS.WEBSITE}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    Documentation
-                  </a>
-                </Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
-      </div>
-    </div>
+        />
+      </motion.div>
+    </OnboardingScreenContainer>
   )
 }

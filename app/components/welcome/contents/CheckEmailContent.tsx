@@ -1,7 +1,15 @@
 import { useEffect, useState } from 'react'
 import { Button } from '@/app/components/ui/button'
-import { AppOrbitImage } from '@/app/components/ui/app-orbit-image'
 import { useAuth } from '../../auth/useAuth'
+import { OnboardingStepCard } from '../components/OnboardingStepCard'
+import { AppsOrbitIcon } from '../../icons/AppsOrbitIcon'
+import { OnboardingScreenContainer } from '../components/OnboardingScreenContainer'
+import { OnboardingStepHeader } from '../components/OnboardingStepHeader'
+import { BackButton } from '../components/BackButton'
+import { ItoLogo } from '../../icons/ItoLogo'
+import ItoIcon from '../../icons/ItoIcon'
+import { motion } from 'framer-motion'
+import { mediaAnimations, opacityAnimations } from '../constants/animations'
 
 type Props = {
   email: string
@@ -22,7 +30,6 @@ export default function CheckEmailContent({
   const [isResending, setIsResending] = useState(false)
   const [pollError, setPollError] = useState<string | null>(null)
   const [resendError, setResendError] = useState<string | null>(null)
-
   const { loginWithEmailPassword } = useAuth()
 
   useEffect(() => {
@@ -90,69 +97,79 @@ export default function CheckEmailContent({
   }, [email, dbUserId, loginWithEmailPassword, onRequireLogin, password])
 
   return (
-    <div className="flex h-full w-full bg-background">
-      {/* Left content */}
-      <div className="flex w-1/2 flex-col justify-center px-16">
-        <div className="mb-8">
-          <h1 className="text-3xl font-semibold text-foreground">
-            Check your email
-          </h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            We've sent a message to {email}.
-          </p>
-        </div>
-
-        <ol className="mb-6 list-decimal space-y-3 pl-5 text-sm text-foreground">
-          <li>
-            Open the email and click{' '}
-            <span className="font-medium">Confirm email</span> to activate your
-            account.
-          </li>
-          <li>
-            Once verified, return here - this page will refresh automatically.
-          </li>
-        </ol>
-
-        <div className="mb-4">
-          <Button
-            variant="outline"
-            disabled={seconds > 0 || isResending}
-            onClick={handleResend}
-            className="h-10 w-full justify-center"
-          >
-            {seconds > 0
-              ? `Resend email (${seconds} Sec)`
-              : isResending
-                ? 'Resending…'
-                : 'Resend email'}
-          </Button>
-          {resendError && (
-            <p className="mt-2 text-xs text-destructive">{resendError}</p>
-          )}
-        </div>
-
-        <button
-          className="text-sm text-foreground underline"
-          onClick={onUseAnotherEmail}
+    <OnboardingScreenContainer className="pt-12 px-4 pb-4">
+      <OnboardingStepCard>
+        <OnboardingStepHeader
+          title="Create Your Email"
+          subtitle="Check your inbox"
+          leftSide={<ItoIcon className="size-6" />}
+        />
+        <motion.div
+          {...opacityAnimations}
+          className="flex mt-6 h-full flex-1 flex-col gap-4 p-6 w-125 border border-border rounded-2xl"
         >
-          Use another email
-        </button>
-
-        <p className="mt-6 max-w-sm text-center text-xs text-muted-foreground">
-          If you don't see it, check your Spam or Promotions folder for a
-          message from support@ito.ai
-        </p>
-        {pollError && (
-          <p className="mt-2 text-center text-xs text-muted-foreground">
-            {pollError}
-          </p>
-        )}
-      </div>
-
-      {/* Right illustration */}
-      <div className="flex w-1/2 items-center justify-center border-l border-border bg-muted/20">
-        <AppOrbitImage />
-      </div>
-    </div>
+          <p className="text-sm">We've sent a message to {email}.</p>
+          <div className="flex items-center gap-2">
+            <div className="flex justify-center items-center size-5 bg-primary text-primary-foreground text-xs font-semibold rounded-full">
+              1
+            </div>
+            <p>
+              Open the email and click{' '}
+              <span className="font-semibold">Confirm email</span> to activate
+              your account.
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="flex justify-center items-center size-5 bg-primary text-primary-foreground text-xs font-semibold rounded-full">
+              2
+            </div>
+            <p>
+              Once verified, return here - this page will refresh automatically.
+            </p>
+          </div>
+          <div className="mt-10 flex flex-col gap-2">
+            <Button
+              variant="secondary"
+              disabled={seconds > 0 || isResending}
+              onClick={handleResend}
+              className="h-10 rounded-full w-full justify-center shadow-none !bg-secondary"
+            >
+              {seconds > 0
+                ? `Resend email (${seconds} Sec)`
+                : isResending
+                  ? 'Resending…'
+                  : 'Resend email'}
+            </Button>
+            {resendError && (
+              <p className="text-center text-xs text-destructive">
+                {resendError}
+              </p>
+            )}
+            <Button
+              className="h-10 rounded-full"
+              onClick={onUseAnotherEmail}
+              variant="ghost"
+            >
+              Use another email
+            </Button>
+            <p className="text-center px-16 text-xs text-muted-foreground">
+              If you don't see it, check your Spam or Promotions folder for a
+              message from support@ito.ai
+            </p>
+            {pollError && (
+              <p className="text-center text-xs text-muted-foreground">
+                {pollError}
+              </p>
+            )}
+          </div>
+        </motion.div>
+      </OnboardingStepCard>
+      <motion.div
+        {...mediaAnimations}
+        className="flex z-50 justify-center absolute items-center bottom-0 top-0 right-0"
+      >
+        <AppsOrbitIcon />
+      </motion.div>
+    </OnboardingScreenContainer>
   )
 }

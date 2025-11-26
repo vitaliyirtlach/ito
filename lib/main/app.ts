@@ -16,13 +16,14 @@ export function getPillWindow(): BrowserWindow | null {
 export function createAppWindow(): BrowserWindow {
   // Create the main window.
   mainWindow = new BrowserWindow({
-    width: 1270,
-    height: 800,
+    width: 1200,
+    height: 700,
     show: false,
     backgroundColor: '#ffffff',
     icon: appIcon,
     frame: false,
     titleBarStyle: 'hiddenInset',
+    roundedCorners: true,
     trafficLightPosition: { x: 20, y: 17 },
     title: 'Ito',
     maximizable: false,

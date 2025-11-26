@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { Switch } from '@/app/components/ui/switch'
 import { Button } from '@/app/components/ui/button'
 import { Check } from '@mynaui/icons-react'
 

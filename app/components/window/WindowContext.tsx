@@ -1,23 +1,33 @@
-import { createContext, useContext, useEffect, useState } from 'react'
+import {
+  createContext,
+  Dispatch,
+  SetStateAction,
+  useContext,
+  useEffect,
+  useState,
+} from 'react'
 import { Titlebar, TitlebarProps } from './Titlebar'
 import { TitlebarContextProvider } from './TitlebarContext'
 
 const WindowContext = createContext<WindowContextProps | undefined>(undefined)
 
+const defaultTitlebar: TitlebarProps = {
+  title: 'Ito',
+  icon: 'appIcon.png',
+  titleCentered: false,
+  showTitlebar: true,
+}
+
 export const WindowContextProvider = ({
   children,
-  titlebar,
+  titlebar: propTitlebar,
 }: WindowContextProviderProps) => {
   const [initProps, setInitProps] = useState<WindowInitProps | undefined>()
-
-  const defaultTitlebar: TitlebarProps = {
-    title: 'Ito',
-    icon: 'appIcon.png',
-    titleCentered: false,
-  }
-
+  const [titlebar, setTitlebar] = useState<TitlebarProps>({
+    ...defaultTitlebar,
+    ...propTitlebar,
+  })
   // Merge default titlebar props with user defined props
-  titlebar = { ...defaultTitlebar, ...titlebar }
 
   useEffect(() => {
     // Load window init props
@@ -33,7 +43,9 @@ export const WindowContextProvider = ({
   }, [])
 
   return (
-    <WindowContext.Provider value={{ titlebar, window: initProps! }}>
+    <WindowContext.Provider
+      value={{ titlebar, window: initProps!, setTitlebar }}
+    >
       <TitlebarContextProvider>
         <Titlebar />
       </TitlebarContextProvider>
@@ -58,6 +70,7 @@ export const useWindowContext = () => {
 
 interface WindowContextProps {
   titlebar: TitlebarProps
+  setTitlebar: Dispatch<SetStateAction<TitlebarProps>>
   readonly window: WindowInitProps
 }
 

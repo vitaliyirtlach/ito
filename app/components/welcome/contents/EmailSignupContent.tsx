@@ -1,10 +1,16 @@
 import { useMemo, useState } from 'react'
 import { Button } from '@/app/components/ui/button'
-import { AppOrbitImage } from '@/app/components/ui/app-orbit-image'
 import { isValidEmail, isStrongPassword } from '@/app/utils/utils'
 import { useAuth } from '@/app/components/auth/useAuth'
 import CheckEmailContent from './CheckEmailContent'
 import { EXTERNAL_LINKS } from '@/lib/constants/external-links'
+import { OnboardingScreenContainer } from '../components/OnboardingScreenContainer'
+import { OnboardingStepCard } from '../components/OnboardingStepCard'
+import { OnboardingStepHeader } from '../components/OnboardingStepHeader'
+import { AppsOrbitIcon } from '../../icons/AppsOrbitIcon'
+import { BackButton } from '../components/BackButton'
+import { motion } from 'framer-motion'
+import { mediaAnimations, opacityAnimations } from '../constants/animations'
 
 type Props = {
   initialEmail?: string
@@ -69,112 +75,100 @@ export default function EmailSignupContent({
   }
 
   return (
-    <div className="flex h-full w-full bg-background">
-      {/* Left: form */}
-      <div className="flex w-1/2 flex-col justify-center px-16">
-        {/* Back */}
-        <button
-          onClick={onBack}
-          className="mb-6 w-fit text-sm text-muted-foreground hover:underline"
+    <OnboardingScreenContainer className="pt-12 px-4 pb-4">
+      <OnboardingStepCard>
+        <OnboardingStepHeader
+          title="Create Your Email"
+          subtitle="Quick and easy setup"
+          leftSide={<BackButton onClick={onBack} />}
+        />
+        <motion.div
+          {...opacityAnimations}
+          className="flex mt-6 flex-col gap-4 p-6 w-125 border border-border rounded-2xl"
         >
-          Back
-        </button>
-
-        {/* Heading */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-semibold text-foreground">
-            Create your account
-          </h1>
-          <p className="mt-2 text-sm text-muted-foreground">
-            This will take just a minute
-          </p>
-        </div>
-
-        {/* Fields */}
-        <div className="space-y-5">
-          <div className="flex flex-col gap-2">
-            <label className="text-sm text-foreground">Email</label>
-            <div className="h-10 w-full rounded-md border border-border bg-muted px-3 text-foreground flex items-center">
-              <span className="truncate" title={email}>
-                {email}
-              </span>
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-2">
+              <label className="text-sm text-foreground">Email</label>
+              <input
+                className="h-9 w-full rounded-lg border border-border shadow-xs bg-background px-3 py-2 text-foreground placeholder:text-muted-foreground outline-none font-sans disabled:opacity-50"
+                disabled
+                value={email}
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-sm text-foreground">Full name</label>
+              <input
+                type="text"
+                placeholder="Enter your Full name"
+                value={fullName}
+                onChange={e => setFullName(e.target.value)}
+                className="h-9 w-full rounded-lg border border-border shadow-xs bg-background px-3 py-2 text-foreground placeholder:text-muted-foreground outline-none font-sans"
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <label className="text-sm text-foreground">Password</label>
+              <input
+                type="password"
+                placeholder="Enter your password"
+                value={password}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    handleCreate()
+                  }
+                }}
+                onChange={e => setPassword(e.target.value)}
+                className="h-9 w-full rounded-lg border border-border shadow-xs bg-background px-3 py-2 text-foreground placeholder:text-muted-foreground outline-none font-sans"
+              />
+              <p className="text-xs text-muted-foreground">
+                Must be 8+ chars, include upper, lower, and number
+              </p>
             </div>
           </div>
-
           <div className="flex flex-col gap-2">
-            <label className="text-sm text-foreground">Full name</label>
-            <input
-              type="text"
-              placeholder="Enter your Full name"
-              value={fullName}
-              onChange={e => setFullName(e.target.value)}
-              className="h-10 w-full rounded-md border border-border bg-background px-3 text-foreground placeholder:text-muted-foreground"
-            />
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <label className="text-sm text-foreground">Password</label>
-            <input
-              type="password"
-              placeholder="Enter your password"
-              value={password}
-              onKeyDown={e => {
-                if (e.key === 'Enter') {
-                  e.preventDefault()
-                  handleCreate()
-                }
-              }}
-              onChange={e => setPassword(e.target.value)}
-              className="h-10 w-full rounded-md border border-border bg-background px-3 text-foreground placeholder:text-muted-foreground"
-            />
-            <p className="text-xs text-muted-foreground">
-              Must be 8+ chars, include upper, lower, and number
+            <Button
+              className="h-10 w-full rounded-full"
+              disabled={!isValid || isCreating}
+              aria-busy={isCreating}
+              onClick={handleCreateSafe}
+            >
+              {isCreating && (
+                <span className="mr-2 inline-block size-4 rounded-full border-2 border-current border-t-transparent animate-spin" />
+              )}
+              {isCreating ? 'Creating…' : 'Create Account'}
+            </Button>
+            {errorMessage && (
+              <p className="mt-2 text-sm text-destructive">{errorMessage}</p>
+            )}
+            <p className="text-center text-xs text-muted-foreground">
+              By continuing, you agree to our{' '}
+              <a
+                href={EXTERNAL_LINKS.WEBSITE}
+                target="_blank"
+                rel="noreferrer"
+                className="underline"
+              >
+                Terms
+              </a>{' '}
+              and{' '}
+              <a
+                href={EXTERNAL_LINKS.PRIVACY_POLICY}
+                target="_blank"
+                rel="noreferrer"
+                className="underline"
+              >
+                Privacy Policy
+              </a>
             </p>
           </div>
-
-          <Button
-            className="h-10 w-full"
-            disabled={!isValid || isCreating}
-            aria-busy={isCreating}
-            onClick={handleCreateSafe}
-          >
-            {isCreating && (
-              <span className="mr-2 inline-block size-4 rounded-full border-2 border-current border-t-transparent animate-spin" />
-            )}
-            {isCreating ? 'Creating…' : 'Create Account'}
-          </Button>
-
-          {errorMessage && (
-            <p className="mt-2 text-sm text-destructive">{errorMessage}</p>
-          )}
-
-          <p className="text-center text-xs text-muted-foreground">
-            By continuing, you agree to our{' '}
-            <a
-              href={EXTERNAL_LINKS.WEBSITE}
-              target="_blank"
-              rel="noreferrer"
-              className="underline"
-            >
-              Terms
-            </a>{' '}
-            and{' '}
-            <a
-              href={EXTERNAL_LINKS.PRIVACY_POLICY}
-              target="_blank"
-              rel="noreferrer"
-              className="underline"
-            >
-              Privacy Policy
-            </a>
-          </p>
-        </div>
-      </div>
-
-      {/* Right: orbit illustration */}
-      <div className="flex w-1/2 items-center justify-center border-l border-border bg-muted/20">
-        <AppOrbitImage />
-      </div>
-    </div>
+        </motion.div>
+      </OnboardingStepCard>
+      <motion.div
+        {...mediaAnimations}
+        className="flex z-50 justify-center absolute items-center bottom-0 top-0 right-0"
+      >
+        <AppsOrbitIcon />
+      </motion.div>
+    </OnboardingScreenContainer>
   )
 }

@@ -6,6 +6,7 @@ import {
   Stop,
   Copy,
   Check,
+  Download,
 } from '@mynaui/icons-react'
 import { EXTERNAL_LINKS } from '@/lib/constants/external-links'
 import { useSettingsStore } from '../../../store/useSettingsStore'
@@ -28,14 +29,8 @@ import { getKeyDisplay } from '@/app/utils/keyboard'
 import { createStereo48kWavFromMonoPCM } from '@/app/utils/audioUtils'
 import { KeyName } from '@/lib/types/keyboard'
 import { usePlatform } from '@/app/hooks/usePlatform'
-import { ProUpgradeDialog } from '../ProUpgradeDialog'
-
-// Interface for interaction statistics
-interface InteractionStats {
-  streakDays: number
-  totalWords: number
-  averageWPM: number
-}
+import { BillingModals } from './BillingModals'
+import { calculateAllStats, InteractionStats } from '@/app/utils/userMetrics'
 
 const StatCard = ({
   title,
@@ -79,110 +74,9 @@ export default function HomeContent() {
   const [stats, setStats] = useState<InteractionStats>({
     streakDays: 0,
     totalWords: 0,
+    weeklyWords: 0,
     averageWPM: 0,
   })
-  const [showProDialog, setShowProDialog] = useState(false)
-
-  // Calculate statistics from interactions
-  const calculateStats = useCallback(
-    (interactions: Interaction[]): InteractionStats => {
-      if (interactions.length === 0) {
-        return { streakDays: 0, totalWords: 0, averageWPM: 0 }
-      }
-
-      // Calculate streak (consecutive days with interactions)
-      const streakDays = calculateStreak(interactions)
-
-      // Calculate total words from transcripts
-      const totalWords = calculateTotalWords(interactions)
-
-      // Calculate average WPM (estimate based on average speaking rate)
-      const averageWPM = calculateAverageWPM(interactions)
-
-      return { streakDays, totalWords, averageWPM }
-    },
-    [],
-  )
-
-  const calculateStreak = (interactions: Interaction[]): number => {
-    if (interactions.length === 0) return 0
-
-    // Group interactions by date
-    const dateGroups = new Map<string, Interaction[]>()
-    interactions.forEach(interaction => {
-      const date = new Date(interaction.created_at).toDateString()
-      if (!dateGroups.has(date)) {
-        dateGroups.set(date, [])
-      }
-      dateGroups.get(date)!.push(interaction)
-    })
-
-    // Sort dates in descending order (most recent first)
-    const sortedDates = Array.from(dateGroups.keys()).sort(
-      (a, b) => new Date(b).getTime() - new Date(a).getTime(),
-    )
-
-    let streak = 0
-    const today = new Date()
-
-    for (let i = 0; i < sortedDates.length; i++) {
-      const currentDate = new Date(sortedDates[i])
-      const expectedDate = new Date(today)
-      expectedDate.setDate(today.getDate() - i)
-
-      // Check if current date matches expected date (allowing for today or previous consecutive days)
-      if (currentDate.toDateString() === expectedDate.toDateString()) {
-        streak++
-      } else {
-        break
-      }
-    }
-
-    return streak
-  }
-
-  const calculateTotalWords = (interactions: Interaction[]): number => {
-    return interactions.reduce((total, interaction) => {
-      const transcript = interaction.asr_output?.transcript?.trim()
-      if (transcript) {
-        // Count words by splitting on whitespace and filtering out empty strings
-        const words = transcript.split(/\s+/).filter(word => word.length > 0)
-        return total + words.length
-      }
-      return total
-    }, 0)
-  }
-
-  const calculateAverageWPM = (interactions: Interaction[]): number => {
-    const validInteractions = interactions.filter(
-      interaction =>
-        interaction.asr_output?.transcript?.trim() && interaction.duration_ms,
-    )
-
-    if (validInteractions.length === 0) return 0
-
-    let totalWords = 0
-    let totalDurationMs = 0
-
-    validInteractions.forEach(interaction => {
-      const transcript = interaction.asr_output?.transcript?.trim()
-      if (transcript && interaction.duration_ms) {
-        // Count words by splitting on whitespace and filtering out empty strings
-        const words = transcript.split(/\s+/).filter(word => word.length > 0)
-        totalWords += words.length
-        totalDurationMs += interaction.duration_ms
-      }
-    })
-
-    if (totalDurationMs === 0) return 0
-
-    // Calculate WPM: (total words / total duration in minutes)
-    const totalMinutes = totalDurationMs / (1000 * 60)
-    const wpm = totalWords / totalMinutes
-
-    // Round to nearest integer and ensure it's reasonable
-    return Math.round(Math.max(1, wpm))
-  }
 
   const formatStreakText = (days: number): string => {
     if (days === 0) return '0 days'
@@ -206,21 +100,20 @@ export default function HomeContent() {
       setInteractions(sortedInteractions)
 
       // Calculate and set statistics
-      const calculatedStats = calculateStats(sortedInteractions)
+      const calculatedStats = calculateAllStats(sortedInteractions)
       setStats(calculatedStats)
     } catch (error) {
       console.error('Failed to load interactions:', error)
     } finally {
       setLoading(false)
     }
-  }, [calculateStats])
+  }, [])
 
   useEffect(() => {
     loadInteractions()
 
     // Listen for new interactions
     const handleInteractionCreated = () => {
-      console.log('[HomeContent] New interaction created, refreshing list...')
       loadInteractions()
     }
 
@@ -455,6 +348,47 @@ export default function HomeContent() {
     }
   }
 
+  const handleAudioDownload = async (interaction: Interaction) => {
+    try {
+      if (!interaction.raw_audio) {
+        console.warn('No audio data available for download')
+        return
+      }
+
+      const pcmData = new Uint8Array(interaction.raw_audio)
+      // Convert raw PCM to WAV format
+      const wavBuffer = createStereo48kWavFromMonoPCM(
+        pcmData,
+        interaction.sample_rate || 16000,
+        48000,
+      )
+      const audioBlob = new Blob([wavBuffer], { type: 'audio/wav' })
+      const audioUrl = URL.createObjectURL(audioBlob)
+
+      // Format filename with timestamp (YYYYMMDD_HHMMSS)
+      const date = new Date(interaction.created_at)
+      const timestamp = date
+        .toISOString()
+        .replace(/[-:]/g, '')
+        .replace('T', '_')
+        .slice(0, 15)
+      const filename = `ito-recording-${timestamp}.wav`
+
+      // Create temporary link and trigger download
+      const link = document.createElement('a')
+      link.href = audioUrl
+      link.download = filename
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+
+      // Clean up the blob URL
+      URL.revokeObjectURL(audioUrl)
+    } catch (error) {
+      console.error('Failed to download audio:', error)
+    }
+  }
+
   return (
     <div className="w-full h-full flex flex-col">
       {/* Fixed Header Content */}
@@ -600,7 +534,7 @@ export default function HomeContent() {
                           </div>
                         </div>
 
-                        {/* Copy and Play buttons - only show on hover or when playing */}
+                        {/* Copy, Download, and Play buttons - only show on hover or when playing */}
                         <div
                           className={`flex items-center gap-2 ${playingAudio === interaction.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} transition-opacity duration-200`}
                         >
@@ -654,6 +588,34 @@ export default function HomeContent() {
                             </Tooltip>
                           )}
 
+                          {/* Download button */}
+                          {interaction.raw_audio && (
+                            <Tooltip
+                              open={
+                                openTooltipKey === `download:${interaction.id}`
+                              }
+                              onOpenChange={open => {
+                                setOpenTooltipKey(
+                                  open ? `download:${interaction.id}` : null,
+                                )
+                              }}
+                            >
+                              <TooltipTrigger asChild>
+                                <button
+                                  className="p-1.5 hover:bg-gray-200 rounded transition-colors cursor-pointer text-gray-600"
+                                  onClick={() =>
+                                    handleAudioDownload(interaction)
+                                  }
+                                >
+                                  <Download className="w-4 h-4" />
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent side="top" sideOffset={5}>
+                                Download audio
+                              </TooltipContent>
+                            </Tooltip>
+                          )}
+
                           {/* Play/Stop button with tooltip */}
                           <Tooltip
                             open={openTooltipKey === `play:${interaction.id}`}
@@ -699,8 +661,7 @@ export default function HomeContent() {
         )}
       </div>
 
-      {/* Pro Upgrade Dialog */}
-      <ProUpgradeDialog open={showProDialog} onOpenChange={setShowProDialog} />
+      <BillingModals />
     </div>
   )
 }

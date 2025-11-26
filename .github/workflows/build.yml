@@ -64,9 +64,6 @@ jobs:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
         run: ./build-app.sh mac
 
-      - name: Compute DMG name
-        run: echo "DMG_NAME=Ito-${{ github.event.release.target_commitish == 'main' && 'Installer' || 'Installer-dev' }}.dmg" >> $GITHUB_ENV
-
       - name: Upload Mac Installer DMG
         uses: actions/upload-artifact@v4
         with:
@@ -84,27 +81,102 @@ jobs:
             dist/*.dmg
             dist/*.dmg.blockmap
 
-  build-windows:
-    runs-on: ubuntu-latest
+  build-windows-rust:
+    runs-on: windows-latest
     environment: ${{ github.event.release.target_commitish == 'main' && 'production' || 'develop' }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Set up Rust with MSVC toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable-x86_64-pc-windows-msvc
+          targets: 'x86_64-pc-windows-msvc'
+
+      - name: Build Rust native modules with MSVC
+        shell: pwsh
+        run: |
+          # Find Visual Studio installation (GitHub Actions uses Enterprise)
+          $vsPath = if (Test-Path "C:\Program Files\Microsoft Visual Studio\2022\Enterprise") {
+            "C:\Program Files\Microsoft Visual Studio\2022\Enterprise"
+          } elseif (Test-Path "C:\Program Files\Microsoft Visual Studio\2022\Community") {
+            "C:\Program Files\Microsoft Visual Studio\2022\Community"
+          } else {
+            throw "Visual Studio 2022 not found"
+          }
+
+          Write-Host "Using Visual Studio at: $vsPath"
+
+          # Launch VS Developer PowerShell and build
+          & "$vsPath\Common7\Tools\Launch-VsDevShell.ps1" -Arch amd64
+
+          # Build each native module
+          $modules = @("global-key-listener", "audio-recorder", "text-writer", "active-application", "selected-text-reader")
+
+          foreach ($module in $modules) {
+            Write-Host "Building $module with MSVC..."
+            Set-Location "native\$module"
+            cargo build --release --target x86_64-pc-windows-msvc
+            Set-Location ..\..
+          }
+
+      - name: Prepare artifacts directory
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path rust-binaries
+
+          $modules = @("global-key-listener", "audio-recorder", "text-writer", "active-application", "selected-text-reader")
+
+          foreach ($module in $modules) {
+            $sourcePath = "native\target\x86_64-pc-windows-msvc\release\$module.exe"
+            $destPath = "rust-binaries\$module.exe"
+
+            if (Test-Path $sourcePath) {
+              Copy-Item $sourcePath $destPath
+              Write-Host "Copied $module.exe"
+            } else {
+              Write-Error "$sourcePath not found!"
+              exit 1
+            }
+          }
+
+      - name: Upload Rust binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: Windows-Rust-Binaries
+          path: rust-binaries/*.exe
+
+  build-windows:
+    runs-on: ubuntu-latest
+    needs: build-windows-rust
+    environment: ${{ github.event.release.target_commitish == 'main' && 'production' || 'develop' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download Rust binaries built with MSVC
+        uses: actions/download-artifact@v4
+        with:
+          name: Windows-Rust-Binaries
+          path: rust-binaries-msvc
+
+      - name: Place Rust binaries in expected locations
+        run: |
+          # Place binaries where electron-builder expects them
+          for module in global-key-listener audio-recorder text-writer active-application selected-text-reader; do
+            mkdir -p "native/target/x86_64-pc-windows-msvc/release"
+            cp "rust-binaries-msvc/$module.exe" "native/target/x86_64-pc-windows-msvc/release/"
+            echo "Placed $module.exe"
+          done
+
       - name: Set up Bun
         uses: oven-sh/setup-bun@v1
 
-      - name: Install dependencies and MinGW-w64
-        run: |
-          sudo apt-get update && sudo apt-get install -y mingw-w64
-          bun install
-
-      - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: stable
-          targets: 'x86_64-pc-windows-gnu'
+      - name: Install dependencies
+        run: bun install
 
       - name: Set up environment
         run: |
@@ -130,7 +202,7 @@ jobs:
       - name: Build and package Windows application (unsigned)
         env:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
-        run: ./build-app.sh windows
+        run: ./build-app.sh windows --skip-binaries
 
       - name: Upload unsigned Windows artifacts for signing
         uses: actions/upload-artifact@v4
@@ -317,10 +389,22 @@ jobs:
 
           # Compare and find stale files (exist in bucket but not in upload list)
           # Exclude .blockmap files from deletion to preserve differential update capability
-          comm -23 <(sort existing_files.txt) <(sort uploaded_root_files.txt) | grep -v '\.blockmap$' > stale_files.txt
+          echo "Existing files in bucket root:"
+          cat existing_files.txt
+          echo ""
+          echo "Files uploaded to bucket root:"
+          cat uploaded_root_files.txt
+          echo ""
+          echo "Computing stale files (existing - uploaded)..."
+          comm -23 <(sort existing_files.txt) <(sort uploaded_root_files.txt) > all_stale_files.txt
+          echo "All stale files before filtering:"
+          cat all_stale_files.txt || echo "(none)"
+          echo ""
+          echo "Filtering out .blockmap files..."
+          grep -v '\.blockmap$' all_stale_files.txt > stale_files.txt || echo "(no non-blockmap stale files found)"
 
           echo "Stale files identified for deletion (excluding .blockmap files for differential updates):"
-          cat stale_files.txt
+          cat stale_files.txt || echo "(none)"
 
           # Delete each stale file (but preserve blockmaps)
           while IFS= read -r file; do

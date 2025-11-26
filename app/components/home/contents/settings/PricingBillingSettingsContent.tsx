@@ -1,11 +1,148 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Button } from '@/app/components/ui/button'
 import { Check } from '@mynaui/icons-react'
-
-type BillingPeriod = 'monthly' | 'annual'
+import useBillingState, { ProStatus } from '@/app/hooks/useBillingState'
 
 export default function PricingBillingSettingsContent() {
-  const [billingPeriod, setBillingPeriod] = useState<BillingPeriod>('annual')
+  const billingState = useBillingState()
+  const [checkoutLoading, setCheckoutLoading] = useState(false)
+  const [checkoutError, setCheckoutError] = useState<string | null>(null)
+  const [downgradeLoading, setDowngradeLoading] = useState(false)
+  const [reactivateLoading, setReactivateLoading] = useState(false)
+
+  // Refresh billing state when checkout session completes
+  useEffect(() => {
+    const offSuccess = window.api.on('billing-session-completed', async () => {
+      // Refresh billing state to reflect the new subscription
+      await billingState.refresh()
+      setCheckoutError(null)
+    })
+
+    return () => {
+      offSuccess?.()
+    }
+  }, [billingState])
+
+  const handleCheckout = async () => {
+    setCheckoutLoading(true)
+    setCheckoutError(null)
+    try {
+      const res = await window.api.billing.createCheckoutSession()
+      if (res?.success && res?.url) {
+        await window.api.invoke('web-open-url', res.url)
+      } else {
+        setCheckoutError(
+          res?.error || 'Failed to create checkout session. Please try again.',
+        )
+      }
+    } catch (err: any) {
+      setCheckoutError(
+        err?.message || 'Failed to create checkout session. Please try again.',
+      )
+    } finally {
+      setCheckoutLoading(false)
+    }
+  }
+
+  const handleDowngrade = async () => {
+    setDowngradeLoading(true)
+    setCheckoutError(null)
+    try {
+      const res = await window.api.billing.cancelSubscription()
+      if (res?.success) {
+        await billingState.refresh()
+      } else {
+        setCheckoutError(
+          res?.error || 'Failed to cancel subscription. Please try again.',
+        )
+      }
+    } catch (err: any) {
+      setCheckoutError(
+        err?.message || 'Failed to cancel subscription. Please try again.',
+      )
+    } finally {
+      setDowngradeLoading(false)
+    }
+  }
+
+  const handleReactivate = async () => {
+    setReactivateLoading(true)
+    setCheckoutError(null)
+    try {
+      const res = await window.api.billing.reactivateSubscription()
+      if (res?.success) {
+        await billingState.refresh()
+      } else {
+        setCheckoutError(
+          res?.error || 'Failed to reactivate subscription. Please try again.',
+        )
+      }
+    } catch (err: any) {
+      setCheckoutError(
+        err?.message || 'Failed to reactivate subscription. Please try again.',
+      )
+    } finally {
+      setReactivateLoading(false)
+    }
+  }
+
+  const handleContactUs = () => {
+    window.api.openMailto('support@ito.ai')
+  }
+
+  // Determine button states based on billing status
+  const getStarterButtonText = () => {
+    if (billingState.isLoading) return 'Loading...'
+    if (downgradeLoading) return 'Cancelling...'
+    if (billingState.isScheduledForCancellation) return 'Current Plan'
+    if (billingState.proStatus === ProStatus.ACTIVE_PRO) return 'Downgrade plan'
+    if (billingState.proStatus === ProStatus.FREE_TRIAL) return 'Downgrade plan'
+    if (
+      billingState.proStatus === ProStatus.NONE &&
+      !billingState.isTrialActive
+    ) {
+      return 'Current plan'
+    }
+    return 'Current plan'
+  }
+
+  const getStarterButtonDisabled = () => {
+    return (
+      (billingState.proStatus === ProStatus.NONE &&
+        !billingState.isTrialActive) ||
+      billingState.isLoading ||
+      downgradeLoading ||
+      billingState.isScheduledForCancellation
+    )
+  }
+
+  const getProButtonText = () => {
+    if (checkoutLoading) return 'Loading...'
+    if (billingState.isLoading) return 'Loading...'
+    if (reactivateLoading) return 'Reactivating...'
+    if (billingState.isScheduledForCancellation) return 'Reactivate'
+    if (billingState.proStatus === ProStatus.ACTIVE_PRO) return 'Current plan'
+    if (billingState.proStatus === ProStatus.FREE_TRIAL) return 'Upgrade Plan'
+    return 'Upgrade'
+  }
+
+  const getProButtonDisabled = () => {
+    return (
+      (billingState.proStatus === ProStatus.ACTIVE_PRO &&
+        !billingState.isScheduledForCancellation) ||
+      billingState.isLoading ||
+      checkoutLoading ||
+      reactivateLoading
+    )
+  }
+
+  const getProCardTitle = () => {
+    if (billingState.isTrialActive && billingState.daysLeft > 0) {
+      const dayText = billingState.daysLeft === 1 ? 'day' : 'days'
+      return `Pro Trial (${billingState.daysLeft} ${dayText} remaining)`
+    }
+    return 'Pro'
+  }
 
   return (
     <div className="space-y-8">
@@ -31,6 +168,32 @@ export default function PricingBillingSettingsContent() {
         <span className="text-sm text-green-600 font-medium">Saved 20%</span>
       </div> */}
 
+      {/* Error Message */}
+      {checkoutError && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 text-sm text-red-800">
+          {checkoutError}
+        </div>
+      )}
+
+      {/* Cancellation Notice */}
+      {billingState.isScheduledForCancellation &&
+        billingState.subscriptionEndAt && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-sm text-yellow-800">
+            <p className="font-medium mb-1">
+              Your subscription will end on{' '}
+              {billingState.subscriptionEndAt.toLocaleDateString('en-US', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+              })}
+            </p>
+            <p className="text-yellow-700">
+              You'll continue to have Pro access until then. You can reactivate
+              anytime before the end date.
+            </p>
+          </div>
+        )}
+
       {/* Pricing Cards */}
       <div className="grid grid-cols-3 gap-6">
         {/* Starter Card */}
@@ -48,16 +211,17 @@ export default function PricingBillingSettingsContent() {
               variant="outline"
               size="lg"
               className="w-full rounded-xl"
-              disabled
+              disabled={getStarterButtonDisabled()}
+              onClick={handleDowngrade}
             >
-              Current plan
+              {getStarterButtonText()}
             </Button>
           }
         />
 
         {/* Pro Card */}
         <PricingCard
-          title="Pro"
+          title={getProCardTitle()}
           price="$8.99"
           priceSubtext="/ month"
           isHighlighted
@@ -73,8 +237,14 @@ export default function PricingBillingSettingsContent() {
               variant="default"
               size="lg"
               className="w-full bg-gray-900 hover:bg-gray-800 text-white rounded-xl"
+              disabled={getProButtonDisabled()}
+              onClick={
+                billingState.isScheduledForCancellation
+                  ? handleReactivate
+                  : handleCheckout
+              }
             >
-              Upgrade for free
+              {getProButtonText()}
             </Button>
           }
         />
@@ -94,6 +264,7 @@ export default function PricingBillingSettingsContent() {
               variant="outline"
               size="lg"
               className="w-full rounded-xl border-gray-200"
+              onClick={handleContactUs}
             >
               Contact Us
             </Button>

@@ -12,6 +12,7 @@ import {
   PolicyStatement,
 } from 'aws-cdk-lib/aws-iam'
 import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs'
+import { Runtime } from 'aws-cdk-lib/aws-lambda'
 import * as cr from 'aws-cdk-lib/custom-resources'
 
 export interface FirehoseConfig {
@@ -21,24 +22,19 @@ export interface FirehoseConfig {
   firehoseRole: IRole
   clientLogGroup: ILogGroup
   serverLogGroup: ILogGroup
-  timingLogGroup: ILogGroup
   ensureClientLogGroup: cr.AwsCustomResource
   ensureServerLogGroup: cr.AwsCustomResource
-  ensureTimingLogGroup: cr.AwsCustomResource
 }
 
 export interface FirehoseResources {
   clientDeliveryStream: CfnDeliveryStream
   serverDeliveryStream: CfnDeliveryStream
-  timingDeliveryStream: CfnDeliveryStream
   clientProcessor: NodejsFunction
   serverProcessor: NodejsFunction
-  timingProcessor: NodejsFunction
   logsToFirehoseRole: IamRole
   logsToFirehosePolicy: Policy
   clientSubscription: CfnSubscriptionFilter
   serverSubscription: CfnSubscriptionFilter
-  timingSubscription: CfnSubscriptionFilter
 }
 
 export function createFirehoseStreams(
@@ -53,6 +49,7 @@ export function createFirehoseStreams(
     {
       entry: 'lambdas/firehose-transform.ts',
       handler: 'handler',
+      runtime: Runtime.NODEJS_24_X,
       environment: { DATASET: 'client', STAGE: config.stageName },
       timeout: Duration.seconds(30),
     },
@@ -64,28 +61,14 @@ export function createFirehoseStreams(
     {
       entry: 'lambdas/firehose-transform.ts',
       handler: 'handler',
+      runtime: Runtime.NODEJS_24_X,
       environment: { DATASET: 'server', STAGE: config.stageName },
-      timeout: Duration.seconds(30),
-    },
-  )
-
-  const timingProcessor = new NodejsFunction(
-    scope,
-    'ItoTimingFirehoseProcessor',
-    {
-      entry: 'lambdas/firehose-transform.ts',
-      handler: 'handler',
-      environment: {
-        DATASET: 'ito-timing-analytics',
-        STAGE: config.stageName,
-      },
       timeout: Duration.seconds(30),
     },
   )
 
   const clientInvokeGrant = clientProcessor.grantInvoke(config.firehoseRole)
   const serverInvokeGrant = serverProcessor.grantInvoke(config.firehoseRole)
-  const timingInvokeGrant = timingProcessor.grantInvoke(config.firehoseRole)
 
   const clientDeliveryStream = new CfnDeliveryStream(
     scope,
@@ -156,48 +139,6 @@ export function createFirehoseStreams(
                 {
                   parameterName: 'LambdaArn',
                   parameterValue: serverProcessor.functionArn,
-                },
-                { parameterName: 'NumberOfRetries', parameterValue: '3' },
-                {
-                  parameterName: 'BufferIntervalInSeconds',
-                  parameterValue: '60',
-                },
-                { parameterName: 'BufferSizeInMBs', parameterValue: '3' },
-              ],
-            },
-          ],
-        },
-      },
-    },
-  )
-
-  const timingDeliveryStream = new CfnDeliveryStream(
-    scope,
-    'ItoTimingLogsToOs',
-    {
-      deliveryStreamName: `${config.stageName}-ito-timing-analytics`,
-      amazonopensearchserviceDestinationConfiguration: {
-        domainArn: config.opensearchDomain.domainArn,
-        indexName: 'ito-timing-analytics',
-        indexRotationPeriod: 'OneDay',
-        roleArn: config.firehoseRole.roleArn,
-        bufferingHints: { intervalInSeconds: 60, sizeInMBs: 5 },
-        s3BackupMode: 'FailedDocumentsOnly',
-        s3Configuration: {
-          bucketArn: config.firehoseBackupBucket.bucketArn,
-          roleArn: config.firehoseRole.roleArn,
-          bufferingHints: { intervalInSeconds: 60, sizeInMBs: 5 },
-          compressionFormat: 'GZIP',
-        },
-        processingConfiguration: {
-          enabled: true,
-          processors: [
-            {
-              type: 'Lambda',
-              parameters: [
-                {
-                  parameterName: 'LambdaArn',
-                  parameterValue: timingProcessor.functionArn,
                 },
                 { parameterName: 'NumberOfRetries', parameterValue: '3' },
                 {
@@ -323,21 +264,6 @@ export function createFirehoseStreams(
     )
   serverInvokeGrant.applyBefore(serverDeliveryStream)
 
-  // Timing delivery stream dependencies (reusing existing policy attachments)
-  if (clientS3PolicyAttach.policyDependable)
-    timingDeliveryStream.node.addDependency(
-      clientS3PolicyAttach.policyDependable,
-    )
-  if (clientEsPolicyAttach.policyDependable)
-    timingDeliveryStream.node.addDependency(
-      clientEsPolicyAttach.policyDependable,
-    )
-  if (clientEsDescribePolicyAttach.policyDependable)
-    timingDeliveryStream.node.addDependency(
-      clientEsDescribePolicyAttach.policyDependable,
-    )
-  timingInvokeGrant.applyBefore(timingDeliveryStream)
-
   const logsToFirehoseRole = new IamRole(scope, 'ItoLogsToFirehoseRole', {
     assumedBy: new ServicePrincipal('logs.amazonaws.com'),
   })
@@ -352,7 +278,6 @@ export function createFirehoseStreams(
           resources: [
             clientDeliveryStream.attrArn,
             serverDeliveryStream.attrArn,
-            timingDeliveryStream.attrArn,
           ],
         }),
       ],
@@ -391,32 +316,14 @@ export function createFirehoseStreams(
   serverSubscription.node.addDependency(logsToFirehosePolicy)
   serverSubscription.node.addDependency(config.ensureServerLogGroup)
 
-  const timingSubscription = new CfnSubscriptionFilter(
-    scope,
-    'ItoTimingLogsSubscription',
-    {
-      logGroupName: config.timingLogGroup.logGroupName,
-      destinationArn: timingDeliveryStream.attrArn,
-      filterPattern: '',
-      roleArn: logsToFirehoseRole.roleArn,
-    },
-  )
-
-  timingSubscription.addDependency(timingDeliveryStream)
-  timingSubscription.node.addDependency(logsToFirehosePolicy)
-  timingSubscription.node.addDependency(config.ensureTimingLogGroup)
-
   return {
     clientDeliveryStream,
     serverDeliveryStream,
-    timingDeliveryStream,
     clientProcessor,
     serverProcessor,
-    timingProcessor,
     logsToFirehoseRole,
     logsToFirehosePolicy,
     clientSubscription,
     serverSubscription,
-    timingSubscription,
   }
 }

@@ -45,6 +45,7 @@ export interface ServiceStackProps extends StackProps {
   vpc: Vpc
   opensearchDomain: Domain
   blobStorageBucket: IBucket
+  timingBucketName: string
 }
 
 export class ServiceStack extends Stack {
@@ -77,6 +78,18 @@ export class ServiceStack extends Stack {
       `${stageName}/ito/cerebras-api-key`,
     )
 
+    const stripeSecretKeySecret = Secret.fromSecretNameV2(
+      this,
+      'StripeSecretKey',
+      `${stageName}/ito/stripe-secret-key`,
+    )
+
+    const stripeWebhookSecret = Secret.fromSecretNameV2(
+      this,
+      'StripeWebhookSecret',
+      `${stageName}/ito/stripe-webhook`,
+    )
+
     // Setup domain and certificate
     const zone = HostedZone.fromLookup(this, 'HostedZone', {
       domainName: 'ito-api.com',
@@ -91,6 +104,13 @@ export class ServiceStack extends Stack {
     // Create log groups
     const logGroupResources = createLogGroups(this, { stageName })
 
+    // Import timing bucket from platform stack
+    const timingBucket = Bucket.fromBucketName(
+      this,
+      'TimingBucket',
+      props.timingBucketName,
+    )
+
     // Create Fargate task
     const fargateTaskResources = createFargateTask(this, {
       stageName,
@@ -98,19 +118,24 @@ export class ServiceStack extends Stack {
       dbCredentialsSecret,
       groqApiKeySecret,
       cerebrasApiKeySecret,
+      stripeSecretKeySecret,
+      stripeWebhookSecret: stripeWebhookSecret,
       dbEndpoint: props.dbEndpoint,
       dbName: DB_NAME,
       dbPort: DB_PORT,
       domainName,
       clientLogGroup: logGroupResources.clientLogGroup,
       serverLogGroup: logGroupResources.serverLogGroup,
-      timingLogGroup: logGroupResources.timingLogGroup,
       blobStorageBucketName: props.blobStorageBucket.bucketName,
+      timingBucketName: props.timingBucketName,
     })
 
     // Grant Fargate task permissions to access blob storage
     props.blobStorageBucket.grantReadWrite(fargateTaskResources.taskRole)
     props.blobStorageBucket.grantDelete(fargateTaskResources.taskRole)
+
+    // Grant Fargate task permissions to write timing data to S3
+    timingBucket.grantPut(fargateTaskResources.taskRole)
 
     // Create ECS cluster
     const cluster = new Cluster(this, 'ItoEcsCluster', {
@@ -155,6 +180,7 @@ export class ServiceStack extends Stack {
         certificate: cert,
         redirectHTTP: true,
         sslPolicy: SslPolicy.RECOMMENDED,
+        circuitBreaker: { enable: true, rollback: true },
       },
     )
 
@@ -202,9 +228,6 @@ export class ServiceStack extends Stack {
     )
     fargateService.service.node.addDependency(
       logGroupResources.ensureServerLogGroup,
-    )
-    fargateService.service.node.addDependency(
-      logGroupResources.ensureTimingLogGroup,
     )
 
     // Import Firehose role created in platform stack
@@ -265,10 +288,8 @@ export class ServiceStack extends Stack {
       firehoseRole,
       clientLogGroup: logGroupResources.clientLogGroup,
       serverLogGroup: logGroupResources.serverLogGroup,
-      timingLogGroup: logGroupResources.timingLogGroup,
       ensureClientLogGroup: logGroupResources.ensureClientLogGroup,
       ensureServerLogGroup: logGroupResources.ensureServerLogGroup,
-      ensureTimingLogGroup: logGroupResources.ensureTimingLogGroup,
     })
 
     // Create OpenSearch bootstrap

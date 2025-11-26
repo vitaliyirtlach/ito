@@ -67,8 +67,15 @@ export class ItoSessionManager {
   }
 
   private async fetchAndSendContext() {
-    // This builds the full config (window context, selected text, vocabulary, settings)
-    await itoStreamController.sendConfigUpdate()
+    console.log('[itoSessionManager] Gathering context...')
+
+    // Gather all context data (window, app, selected text, vocabulary, settings)
+    const context = await contextGrabber.gatherContext(
+      itoStreamController.getCurrentMode(),
+    )
+
+    // Send the gathered context to the stream controller
+    await itoStreamController.scheduleConfigUpdate(context)
 
     // Fetch cursor context for grammar rules only if grammar service is enabled
     const { grammarServiceEnabled } = getAdvancedSettings()
@@ -160,6 +167,9 @@ export class ItoSessionManager {
     // Update UI state
     recordingStateNotifier.notifyRecordingStopped()
 
+    // Notify processing started
+    recordingStateNotifier.notifyProcessingStarted()
+
     // Wait for the stream response and handle it
     if (responsePromise) {
       console.log(
@@ -180,9 +190,13 @@ export class ItoSessionManager {
           error,
         )
         await this.handleTranscriptionError(error)
+      } finally {
+        // Always notify processing stopped after handling response
+        recordingStateNotifier.notifyProcessingStopped()
       }
     } else {
       console.warn('[itoSessionManager] No stream response promise to wait for')
+      recordingStateNotifier.notifyProcessingStopped()
     }
   }
 
@@ -218,7 +232,7 @@ export class ItoSessionManager {
             this.grammarRulesService.addLeadingSpaceIfNeeded(textToInsert)
         }
 
-        await this.textInserter.insertText(textToInsert)
+        this.textInserter.insertText(textToInsert)
 
         // Create interaction in database
         await interactionManager.createInteraction(

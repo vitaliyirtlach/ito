@@ -15,14 +15,14 @@ const getMacResources = () =>
 
 const getWindowsResources = () =>
   nativeBinaries.map(binary => ({
-    from: `native/target/x86_64-pc-windows-gnu/release/${binary}.exe`,
+    from: `native/target/x86_64-pc-windows-msvc/release/${binary}.exe`,
     to: `binaries/${binary}.exe`,
   }))
 
 const stage = process.env.ITO_ENV || 'prod'
 module.exports = {
   appId: stage === 'prod' ? 'ai.ito.ito' : `ai.ito.ito-${stage.toLowerCase()}`,
-  productName: stage === 'prod' ? 'Ito' : `Ito (${stage})`,
+  productName: stage === 'prod' ? 'Ito' : `Ito-${stage}`,
   copyright: 'Copyright © 2025 Demox Labs',
   directories: {
     buildResources: 'resources',
@@ -67,7 +67,7 @@ module.exports = {
     hardenedRuntime: true,
     gatekeeperAssess: false,
     identity: 'Demox Labs, Inc. (294ZSTM7UB)',
-    notarize: stage === 'prod',
+    notarize: true,
     entitlements: 'build/entitlements.mac.plist',
     entitlementsInherit: 'build/entitlements.mac.inherit.plist',
     extendInfo: {

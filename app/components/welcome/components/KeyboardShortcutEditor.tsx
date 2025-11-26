@@ -16,7 +16,6 @@ import { usePlatform } from '@/app/hooks/usePlatform'
 import { useShortcutEditingStore } from '@/app/store/useShortcutEditingStore'
 import { KeyboardShortcutConfig } from '../../ui/multi-shortcut-editor'
 import { cn } from '@/lib/utils'
-import { motion } from 'framer-motion'
 
 interface KeyboardShortcutEditorProps {
   shortcut: KeyboardShortcutConfig

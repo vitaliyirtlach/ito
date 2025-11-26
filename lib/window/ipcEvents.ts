@@ -1,6 +1,9 @@
-import { BrowserWindow, ipcMain, shell, app } from 'electron'
+import { BrowserWindow, ipcMain, shell, app, dialog } from 'electron'
 import log from 'electron-log'
 import os from 'os'
+import { exec } from 'child_process'
+import fs from 'fs/promises'
+import path from 'path'
 import store, { getCurrentUserId } from '../main/store'
 import { STORE_KEYS } from '../constants/store-keys'
 import {
@@ -30,7 +33,6 @@ import {
   NotesTable,
   DictionaryTable,
   InteractionsTable,
-  UserMetadataTable,
 } from '../main/sqlite/repo'
 import { audioRecorderService } from '../media/audio'
 import { voiceInputService } from '../main/voiceInputService'
@@ -42,6 +44,7 @@ import {
   hasSelectedText,
 } from '../media/selected-text-reader'
 import { IPC_EVENTS } from '../types/ipc'
+import { itoHttpClient } from '../clients/itoHttpClient'
 
 const handleIPC = (channel: string, handler: (...args: any[]) => any) => {
   ipcMain.handle(channel, handler)
@@ -180,8 +183,34 @@ export function registerIPC() {
     exchangeAuthCode(_e, { authCode, state, config }),
   )
   handleIPC('logout', () => handleLogout())
-  handleIPC('notify-login-success', (_e, { profile, idToken, accessToken }) => {
-    handleLogin(profile, idToken, accessToken)
+  handleIPC(
+    'notify-login-success',
+    async (_e, { profile, idToken, accessToken }) => {
+      handleLogin(profile, idToken, accessToken)
+    },
+  )
+
+  // Start trial when onboarding completes
+  handleIPC('start-trial-after-onboarding', async () => {
+    const result = await itoHttpClient.post('/trial/start', undefined, {
+      requireAuth: true,
+    })
+
+    if (result.success) {
+      console.log('[IPC] trial start succeeded')
+      // Notify renderer that trial started so it can refresh billing state
+      if (
+        mainWindow &&
+        !mainWindow.isDestroyed() &&
+        !mainWindow.webContents.isDestroyed()
+      ) {
+        mainWindow.webContents.send('trial-started')
+      }
+    } else {
+      console.error('[IPC] trial start failed:', result.error)
+    }
+
+    return result
   })
 
   // Token refresh handler
@@ -275,6 +304,23 @@ export function registerIPC() {
     window?.setFullScreen(!window.isFullScreen())
   })
   handleIPC('web-open-url', (_e, url) => shell.openExternal(url))
+
+  handleIPC('open-mailto', (_e, email: string) => {
+    const mailtoUrl = `mailto:${email}`
+    // On macOS, use the 'open' command which is more reliable for mailto links
+    if (process.platform === 'darwin') {
+      exec(`open "${mailtoUrl}"`, error => {
+        if (error) {
+          console.error('Failed to open mailto link:', error)
+          // Fallback to shell.openExternal
+          shell.openExternal(mailtoUrl)
+        }
+      })
+    } else {
+      // On other platforms, use shell.openExternal
+      shell.openExternal(mailtoUrl)
+    }
+  })
   // Auth0 DB signup proxy (avoids CORS issues from custom schemes)
   handleIPC('auth0-db-signup', async (_e, { email, password, name }) => {
     try {
@@ -368,60 +414,48 @@ export function registerIPC() {
 
   // Send verification email via server proxy
   handleIPC('auth0-send-verification', async (_e, { dbUserId }) => {
-    try {
-      if (!dbUserId) return { success: false, error: 'Missing user identifier' }
-      const baseUrl = import.meta.env.VITE_GRPC_BASE_URL
-      const token = (store.get(STORE_KEYS.ACCESS_TOKEN) as string | null) || ''
-      const url = new URL('/auth0/send-verification', baseUrl)
-      const res = await fetch(url.toString(), {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ dbUserId, clientId: Auth0Config.clientId }),
-      })
-      const data: any = await res.json().catch(() => undefined)
-      if (!res.ok) {
-        return {
-          success: false,
-          error: data?.error || `Verification request failed (${res.status})`,
-          status: res.status,
-        }
-      }
-      return data
-    } catch (error: any) {
-      return { success: false, error: error?.message || 'Network error' }
-    }
+    if (!dbUserId) return { success: false, error: 'Missing user identifier' }
+    return itoHttpClient.post('/auth0/send-verification', {
+      dbUserId,
+      clientId: Auth0Config.clientId,
+    })
   })
 
   // Check if email exists for db signup and whether it's verified (via server proxy)
   handleIPC('auth0-check-email', async (_e, { email }) => {
-    try {
-      if (!email) return { success: false, error: 'Missing email' }
-      const baseUrl = import.meta.env.VITE_GRPC_BASE_URL
-      const token = (store.get(STORE_KEYS.ACCESS_TOKEN) as string | null) || ''
-      const url = new URL(
-        `/auth0/users-by-email?email=${encodeURIComponent(email)}`,
-        baseUrl,
-      )
-      const res = await fetch(url.toString(), {
-        headers: {
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-      })
-      const data: any = await res.json().catch(() => undefined)
-      if (!res.ok) {
-        return {
-          success: false,
-          error: data?.error || `Lookup failed (${res.status})`,
-          status: res.status,
-        }
-      }
-      return data
-    } catch (error: any) {
-      return { success: false, error: error?.message || 'Network error' }
-    }
+    if (!email) return { success: false, error: 'Missing email' }
+    return itoHttpClient.get(
+      `/auth0/users-by-email?email=${encodeURIComponent(email)}`,
+    )
+  })
+
+  // Trial routes proxy
+  handleIPC('trial:complete', async () => {
+    return itoHttpClient.post('/trial/complete')
+  })
+
+  // Billing routes proxy
+  handleIPC('billing:create-checkout-session', async () => {
+    return itoHttpClient.post('/billing/checkout')
+  })
+
+  handleIPC(
+    'billing:confirm-session',
+    async (_e, { sessionId }: { sessionId: string }) => {
+      return itoHttpClient.post('/billing/confirm', { session_id: sessionId })
+    },
+  )
+
+  handleIPC('billing:status', async () => {
+    return itoHttpClient.get('/billing/status')
+  })
+
+  handleIPC('billing:cancel-subscription', async () => {
+    return itoHttpClient.post('/billing/cancel')
+  })
+
+  handleIPC('billing:reactivate-subscription', async () => {
+    return itoHttpClient.post('/billing/reactivate')
   })
   handleIPC('open-auth-window', async (_e, { url, redirectUri }) => {
     try {
@@ -527,21 +561,6 @@ export function registerIPC() {
   handleIPC('dictionary:delete', async (_e, id) =>
     DictionaryTable.softDelete(id),
   )
-
-  // User Metadata
-  handleIPC('user-metadata:get', async () => {
-    const user_id = getCurrentUserId()
-    if (!user_id) return null
-    return UserMetadataTable.findByUserId(user_id)
-  })
-  handleIPC('user-metadata:upsert', async (_e, metadata) => {
-    return await UserMetadataTable.upsert(metadata)
-  })
-  handleIPC('user-metadata:update', async (_e, updates) => {
-    const user_id = getCurrentUserId()
-    if (!user_id) throw new Error('No user ID found')
-    return await UserMetadataTable.update(user_id, updates)
-  })
 
   // Interactions
   handleIPC('interactions:get-all', () => {
@@ -694,24 +713,62 @@ export function registerIPC() {
 
   // Resolve and clear install link token
   handleIPC('analytics:resolve-install-token', async () => {
+    return itoHttpClient.get('/link/resolve')
+  })
+
+  // Logs management
+  handleIPC('logs:download', async () => {
     try {
-      const url = new URL(`/link/resolve`, import.meta.env.VITE_GRPC_BASE_URL)
-      const res = await fetch(url.toString(), {
-        headers: { 'content-type': 'application/json' },
-      })
-      const data: any = await res.json().catch(() => undefined)
-      if (!res.ok) {
+      if (!app.isPackaged) {
         return {
           success: false,
-          error: data?.error || `Resolve failed (${res.status})`,
-          status: res.status,
+          error: 'Logs are only saved in packaged builds',
         }
       }
-      return {
-        success: true,
-        websiteDistinctId: data?.websiteDistinctId || null,
+
+      const logFilePath = log.transports.file.getFile().path
+      const logFileName = path.basename(logFilePath)
+
+      // Show save dialog
+      const result = await dialog.showSaveDialog({
+        title: 'Save Logs',
+        defaultPath: logFileName,
+        filters: [{ name: 'Log Files', extensions: ['log'] }],
+      })
+
+      if (result.canceled || !result.filePath) {
+        return { success: false, error: 'Download cancelled' }
       }
+
+      // Copy log file to chosen location
+      await fs.copyFile(logFilePath, result.filePath)
+
+      console.log(`[IPC] Logs downloaded to: ${result.filePath}`)
+      return { success: true, path: result.filePath }
     } catch (error: any) {
+      console.error('[IPC] Failed to download logs:', error)
+      return { success: false, error: error?.message || 'Unknown error' }
+    }
+  })
+
+  handleIPC('logs:clear', async () => {
+    try {
+      // Clear the log queue from electron-store
+      const LOG_QUEUE_KEY = 'log_queue:events'
+      store.set(LOG_QUEUE_KEY, [])
+
+      // Clear the log file if packaged
+      if (app.isPackaged) {
+        const logFilePath = log.transports.file.getFile().path
+        // Write empty string to clear the file
+        await fs.writeFile(logFilePath, '')
+        console.log(`[IPC] Log file cleared: ${logFilePath}`)
+      }
+
+      console.log('[IPC] Logs cleared successfully')
+      return { success: true }
+    } catch (error: any) {
+      console.error('[IPC] Failed to clear logs:', error)
       return { success: false, error: error?.message || 'Unknown error' }
     }
   })

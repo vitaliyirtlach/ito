@@ -22,7 +22,7 @@ import { ArrowUpIcon, ChevronDownIcon } from 'lucide-react'
 import { TooltipArrow } from '@radix-ui/react-tooltip'
 import { cn } from '@/lib/utils'
 import { motion } from 'framer-motion'
-import { mediaAnimations, opacityAnimations } from '../constants/animations'
+import { opacityAnimations } from '../constants/animations'
 
 const SlackPreview = () => {
   return (

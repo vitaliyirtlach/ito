@@ -24,6 +24,11 @@ import {
   concatenateAudioChunks,
   prepareAudioForTranscription,
 } from '../../utils/audioProcessing.js'
+import {
+  serverTimingCollector,
+  ServerTimingEventName,
+} from '../timing/ServerTimingCollector.js'
+import { kUser } from '../../auth/userContext.js'
 
 export class TranscribeStreamV2Handler {
   private readonly MODE_CHANGE_GRACE_PERIOD_MS = 100
@@ -46,8 +51,21 @@ export class TranscribeStreamV2Handler {
 
     const streamEndTime = Date.now()
 
+    // Extract interaction ID and user ID for timing
+    const interactionId = initialConfig?.interactionId
+    const userId = context?.values.get(kUser)?.sub
+
+    // Initialize timing collection
+    serverTimingCollector.startInteraction(interactionId, userId)
+    serverTimingCollector.startTiming(
+      ServerTimingEventName.TOTAL_PROCESSING,
+      interactionId,
+    )
+
     // Check if client cancelled the stream
     if (context?.signal.aborted) {
+      serverTimingCollector.clearInteraction(interactionId)
+
       console.log(
         `🚫 [${new Date().toISOString()}] Stream cancelled by client, aborting processing`,
       )
@@ -70,16 +88,23 @@ export class TranscribeStreamV2Handler {
     const fullAudio = concatenateAudioChunks(audioChunks)
 
     try {
-      const fullAudioWAV = prepareAudioForTranscription(fullAudio)
+      // Time audio processing
+      const fullAudioWAV = interactionId
+        ? await serverTimingCollector.timeAsync(
+            ServerTimingEventName.AUDIO_PROCESSING,
+            () => prepareAudioForTranscription(fullAudio),
+            interactionId,
+          )
+        : prepareAudioForTranscription(fullAudio)
 
       // Extract configuration
       const asrConfig = this.extractAsrConfig(mergedConfig)
 
-      // Transcribe audio
-      let transcript = await this.transcribeAudioData(
-        fullAudioWAV,
-        asrConfig,
-        context,
+      // Time transcription
+      let transcript = await serverTimingCollector.timeAsync(
+        ServerTimingEventName.ASR_TRANSCRIPTION,
+        () => this.transcribeAudioData(fullAudioWAV, asrConfig, context),
+        interactionId,
       )
 
       // Prepare context and settings
@@ -98,7 +123,18 @@ export class TranscribeStreamV2Handler {
         asrConfig.noSpeechThreshold,
       )
 
-      // Adjust transcript based on mode
+      // Time transcript adjustment (only happens in EDIT mode)
+      // transcript = await serverTimingCollector.timeAsync(
+      //   ServerTimingEventName.LLM_ADJUSTMENT,
+      //   () =>
+      //     this.adjustTranscriptForMode(
+      //       transcript,
+      //       mode,
+      //       windowContext,
+      //       advancedSettings,
+      //     ),
+      //   interactionId,
+      // )
       transcript = await this.adjustTranscriptForMode(
         transcript,
         mode,
@@ -107,6 +143,14 @@ export class TranscribeStreamV2Handler {
       )
 
       const duration = Date.now() - startTime
+
+      // Finalize timing
+      serverTimingCollector.endTiming(
+        ServerTimingEventName.TOTAL_PROCESSING,
+        interactionId,
+      )
+      serverTimingCollector.finalizeInteraction(interactionId)
+
       console.log(
         `✅ [${new Date().toISOString()}] TranscribeStreamV2 completed in ${duration}ms`,
       )
@@ -115,6 +159,11 @@ export class TranscribeStreamV2Handler {
         transcript,
       })
     } catch (error: any) {
+      // Clear timing on error
+      if (interactionId) {
+        serverTimingCollector.clearInteraction(interactionId)
+      }
+
       if (error instanceof ConnectError) {
         throw error
       }
@@ -223,17 +272,34 @@ export class TranscribeStreamV2Handler {
 
   private extractAsrConfig(mergedConfig: StreamConfig) {
     return {
-      asrModel:
-        mergedConfig.llmSettings?.asrModel ||
+      asrModel: this.resolveOrDefault(
+        mergedConfig.llmSettings?.asrModel,
         DEFAULT_ADVANCED_SETTINGS.asrModel,
-      asrProvider:
-        mergedConfig.llmSettings?.asrProvider ||
+      ),
+      asrProvider: this.resolveOrDefault(
+        mergedConfig.llmSettings?.asrProvider,
         DEFAULT_ADVANCED_SETTINGS.asrProvider,
-      noSpeechThreshold:
-        mergedConfig.llmSettings?.noSpeechThreshold ??
+      ),
+      noSpeechThreshold: this.resolveOrDefault(
+        mergedConfig.llmSettings?.noSpeechThreshold,
         DEFAULT_ADVANCED_SETTINGS.noSpeechThreshold,
+      ),
       vocabulary: mergedConfig.vocabulary,
     }
+  }
+
+  /**
+   * Resolves a value to its default if it's undefined, null, or empty.
+   * This provides a defensive fallback for optional protobuf fields.
+   */
+  private resolveOrDefault<T extends string | number>(
+    value: T | undefined,
+    defaultValue: T,
+  ): T {
+    if (value === undefined || value === '' || value === null) {
+      return defaultValue
+    }
+    return value
   }
 
   private prepareAdvancedSettings(
@@ -243,27 +309,42 @@ export class TranscribeStreamV2Handler {
     noSpeechThreshold: number,
   ) {
     return {
-      asrModel,
-      asrProvider,
-      asrPrompt:
-        mergedConfig.llmSettings?.asrPrompt ||
+      asrModel: this.resolveOrDefault(
+        asrModel,
+        DEFAULT_ADVANCED_SETTINGS.asrModel,
+      ),
+      asrProvider: this.resolveOrDefault(
+        asrProvider,
+        DEFAULT_ADVANCED_SETTINGS.asrProvider,
+      ),
+      asrPrompt: this.resolveOrDefault(
+        mergedConfig.llmSettings?.asrPrompt,
         DEFAULT_ADVANCED_SETTINGS.asrPrompt,
-      llmProvider:
-        mergedConfig.llmSettings?.llmProvider ||
+      ),
+      llmProvider: this.resolveOrDefault(
+        mergedConfig.llmSettings?.llmProvider,
         DEFAULT_ADVANCED_SETTINGS.llmProvider,
-      llmModel:
-        mergedConfig.llmSettings?.llmModel ||
+      ),
+      llmModel: this.resolveOrDefault(
+        mergedConfig.llmSettings?.llmModel,
         DEFAULT_ADVANCED_SETTINGS.llmModel,
-      llmTemperature:
-        mergedConfig.llmSettings?.llmTemperature ??
+      ),
+      llmTemperature: this.resolveOrDefault(
+        mergedConfig.llmSettings?.llmTemperature,
         DEFAULT_ADVANCED_SETTINGS.llmTemperature,
-      transcriptionPrompt:
-        mergedConfig.llmSettings?.transcriptionPrompt ||
+      ),
+      transcriptionPrompt: this.resolveOrDefault(
+        mergedConfig.llmSettings?.transcriptionPrompt,
         DEFAULT_ADVANCED_SETTINGS.transcriptionPrompt,
-      editingPrompt:
-        mergedConfig.llmSettings?.editingPrompt ||
+      ),
+      editingPrompt: this.resolveOrDefault(
+        mergedConfig.llmSettings?.editingPrompt,
         DEFAULT_ADVANCED_SETTINGS.editingPrompt,
-      noSpeechThreshold,
+      ),
+      noSpeechThreshold: this.resolveOrDefault(
+        noSpeechThreshold,
+        DEFAULT_ADVANCED_SETTINGS.noSpeechThreshold,
+      ),
     }
   }
 
@@ -312,13 +393,14 @@ export class TranscribeStreamV2Handler {
     const userPrompt = createUserPromptWithContext(transcript, windowContext)
     const llmProvider = getLlmProvider(advancedSettings.llmProvider)
 
-    const adjustedTranscript = await llmProvider.adjustTranscript(
-      userPromptPrefix + '\n' + userPrompt,
-      {
-        temperature: advancedSettings.llmTemperature,
-        model: advancedSettings.llmModel,
-        prompt: ITO_MODE_SYSTEM_PROMPT[mode],
-      },
+    const adjustedTranscript = await serverTimingCollector.timeAsync(
+      ServerTimingEventName.LLM_ADJUSTMENT,
+      () =>
+        llmProvider.adjustTranscript(userPromptPrefix + '\n' + userPrompt, {
+          temperature: advancedSettings.llmTemperature,
+          model: advancedSettings.llmModel,
+          prompt: ITO_MODE_SYSTEM_PROMPT[mode],
+        }),
     )
 
     console.log(
@@ -362,6 +444,7 @@ export class TranscribeStreamV2Handler {
         : base.llmSettings,
       vocabulary:
         update.vocabulary.length > 0 ? update.vocabulary : base.vocabulary,
+      interactionId: update.interactionId || base.interactionId,
     }
   }
 }

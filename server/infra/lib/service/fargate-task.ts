@@ -26,14 +26,16 @@ export interface FargateTaskConfig {
   dbCredentialsSecret: ISecret
   groqApiKeySecret: ISecret
   cerebrasApiKeySecret: ISecret
+  stripeSecretKeySecret: ISecret
+  stripeWebhookSecret: ISecret
   dbEndpoint: string
   dbName: string
   dbPort: number
   domainName: string
   clientLogGroup: ILogGroup
   serverLogGroup: ILogGroup
-  timingLogGroup: ILogGroup
   blobStorageBucketName?: string
+  timingBucketName?: string
 }
 
 export interface FargateTaskResources {
@@ -57,6 +59,8 @@ export function createFargateTask(
   config.dbCredentialsSecret.grantRead(fargateTaskRole)
   config.groqApiKeySecret.grantRead(fargateTaskRole)
   config.cerebrasApiKeySecret.grantRead(fargateTaskRole)
+  config.stripeSecretKeySecret.grantRead(fargateTaskRole)
+  config.stripeWebhookSecret.grantRead(fargateTaskRole)
 
   const taskExecutionRole = new IamRole(scope, 'ItoTaskExecRole', {
     assumedBy: new ServicePrincipal('ecs-tasks.amazonaws.com'),
@@ -66,6 +70,31 @@ export function createFargateTask(
       ),
     ],
   })
+
+  // Grant execution role permissions to read secrets (required for ECS to pull secrets during container startup)
+  config.dbCredentialsSecret.grantRead(taskExecutionRole)
+  config.groqApiKeySecret.grantRead(taskExecutionRole)
+  config.cerebrasApiKeySecret.grantRead(taskExecutionRole)
+  config.stripeSecretKeySecret.grantRead(taskExecutionRole)
+  config.stripeWebhookSecret.grantRead(taskExecutionRole)
+
+  // Explicitly add policy statement for secrets to ensure permissions are applied correctly
+  // This is a workaround for cases where grantRead() might not work correctly with fromSecretNameV2()
+  taskExecutionRole.addToPolicy(
+    new PolicyStatement({
+      actions: [
+        'secretsmanager:GetSecretValue',
+        'secretsmanager:DescribeSecret',
+      ],
+      resources: [
+        config.dbCredentialsSecret.secretArn,
+        config.groqApiKeySecret.secretArn,
+        config.cerebrasApiKeySecret.secretArn,
+        config.stripeSecretKeySecret.secretArn,
+        config.stripeWebhookSecret.secretArn,
+      ],
+    }),
+  )
 
   const taskDefinition = new FargateTaskDefinition(scope, 'ItoTaskDefinition', {
     taskRole: fargateTaskRole,
@@ -96,6 +125,12 @@ export function createFargateTask(
       CEREBRAS_API_KEY: EcsSecret.fromSecretsManager(
         config.cerebrasApiKeySecret,
       ),
+      STRIPE_SECRET_KEY: EcsSecret.fromSecretsManager(
+        config.stripeSecretKeySecret,
+      ),
+      STRIPE_WEBHOOK_SECRET: EcsSecret.fromSecretsManager(
+        config.stripeWebhookSecret,
+      ),
     },
     environment: {
       DB_HOST: config.dbEndpoint,
@@ -108,13 +143,19 @@ export function createFargateTask(
       AUTH0_MGMT_CLIENT_ID: process.env.AUTH0_MGMT_CLIENT_ID || '',
       AUTH0_MGMT_CLIENT_SECRET: process.env.AUTH0_MGMT_CLIENT_SECRET || '',
       AUTH0_CALLBACK_URL: `https://${config.domainName}/callback`,
+      STRIPE_PRICE_ID: process.env.STRIPE_PRICE_ID || '',
+      APP_PROTOCOL: process.env.APP_PROTOCOL || '',
+      STRIPE_PUBLIC_BASE_URL: process.env.STRIPE_PUBLIC_BASE_URL || '',
       GROQ_TRANSCRIPTION_MODEL: 'whisper-large-v3',
       CLIENT_LOG_GROUP_NAME: config.clientLogGroup.logGroupName,
-      TIMING_LOG_GROUP_NAME: config.timingLogGroup.logGroupName,
       ...(config.blobStorageBucketName && {
         BLOB_STORAGE_BUCKET: config.blobStorageBucketName,
       }),
+      ...(config.timingBucketName && {
+        TIMING_BUCKET: config.timingBucketName,
+      }),
       ITO_ENV: config.stageName,
+      SHOW_ALL_REQUEST_LOGS: 'true',
     },
     logging: new AwsLogDriver({
       streamPrefix: 'ito-server',
@@ -137,8 +178,6 @@ export function createFargateTask(
           `arn:aws:logs:${stack.region}:${stack.account}:log-group:/ito/${config.stageName}/client:log-stream:*`,
           `arn:aws:logs:${stack.region}:${stack.account}:log-group:/ito/${config.stageName}/server`,
           `arn:aws:logs:${stack.region}:${stack.account}:log-group:/ito/${config.stageName}/server:log-stream:*`,
-          `arn:aws:logs:${stack.region}:${stack.account}:log-group:/ito/${config.stageName}/timing-analytics`,
-          `arn:aws:logs:${stack.region}:${stack.account}:log-group:/ito/${config.stageName}/timing-analytics:log-stream:*`,
         ],
       }),
     ],

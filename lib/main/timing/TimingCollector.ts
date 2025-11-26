@@ -1,11 +1,11 @@
-import { getCurrentUserId } from '../store'
+import { getCurrentUserId, store } from '../store'
 import { platform, hostname, arch } from 'os'
 import { performance } from 'perf_hooks'
-import { analytics } from '@/app/components/analytics'
 import { app } from 'electron'
 import { TimingReport, TimingEvent } from '@/app/generated/ito_pb'
 import { grpcClient } from '../../clients/grpcClient'
 import { interactionManager } from '../interactions/InteractionManager'
+import { STORE_KEYS } from '../../constants/store-keys'
 
 /**
  * Enum for all tracked timing events in the interaction lifecycle
@@ -22,6 +22,7 @@ export enum TimingEventName {
   SELCTED_TEXT_GATHER = 'selected_text_gather',
   WINDOW_CONTEXT_GATHER = 'window_context_gather',
   GRAMMAR_SERVICE = 'grammar_service',
+  CURSOR_CONTEXT_GATHER = 'cursor_context_gather',
 
   // Output
   TEXT_WRITER = 'text_writer',
@@ -54,7 +55,9 @@ export class TimingCollector {
   }
 
   private shouldCollect(): boolean {
-    return analytics.isEnabled()
+    const settings = store.get(STORE_KEYS.SETTINGS)
+    const shareAnalytics = settings?.shareAnalytics ?? false
+    return shareAnalytics
   }
 
   /**
@@ -227,12 +230,15 @@ export class TimingCollector {
   /**
    * Flush completed reports to the server via gRPC
    */
-  async flush() {
+  async flush({ flushAll = false } = {}) {
     if (this.completedReports.length === 0) {
       return
     }
 
-    const reportsToSend = this.completedReports.splice(0, this.BATCH_SIZE)
+    const reportsToSend = this.completedReports.splice(
+      0,
+      flushAll ? this.completedReports.length : this.BATCH_SIZE,
+    )
 
     console.log(
       `[TimingCollector] Flushing ${reportsToSend.length} timing reports to server`,
@@ -272,7 +278,7 @@ export class TimingCollector {
     }
 
     // Flush any remaining reports
-    await this.flush()
+    await this.flush({ flushAll: true })
 
     console.log('[TimingCollector] Service shutdown complete')
   }

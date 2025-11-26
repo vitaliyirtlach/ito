@@ -229,14 +229,14 @@ export default function TryItOut() {
                         opacity: { duration: 0.4 },
                         scale: { duration: 0.4 },
                         y: {
-                          duration: 2.4,
+                          duration: 1,
                           repeat: Infinity,
                           ease: 'easeInOut',
                         },
                       }}
                     >
                       <div>
-                        Hold
+                        Hold{' '}
                         {keyboardShortcut.map((key, idx) => (
                           <React.Fragment key={`keyboard-shortcut-${idx}`}>
                             <span className="inline-flex items-center px-2 py-0.5 bg-white/10 rounded text-xs font-mono mx-1 first:ml-0 last:mr-0 font-bold">

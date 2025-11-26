@@ -62,7 +62,13 @@ export default function DataControlContent() {
           title="Manage Your Data"
           subtitle="Share or Stay Private"
           leftSide={<BackButton onClick={decrementOnboardingStep} />}
-          rightSide={<OnboardingStepper title="Welcome!" index={0} />}
+          rightSide={
+            <OnboardingStepper
+              shouldAnimate={false}
+              title="Welcome!"
+              index={0}
+            />
+          }
         />
 
         <motion.div {...opacityAnimations} className="flex mt-6 flex-col gap-4">

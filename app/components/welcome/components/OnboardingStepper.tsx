@@ -51,7 +51,6 @@ export const OnboardingStepper = ({
                 shouldAnimate && isActive
                   ? {
                       background: 'rgb(243 244 246)',
-                      color: 'rgb(17 24 39)',
                       scale: 0.95,
                     }
                   : false
@@ -60,7 +59,6 @@ export const OnboardingStepper = ({
                 background: isActive
                   ? 'linear-gradient(102.08deg, #00E5FF -101.44%, #9D00FF 3.79%, #FF06B7 72.6%)'
                   : 'rgb(243 244 246)',
-                color: isActive ? 'rgb(255 255 255)' : 'rgb(17 24 39)',
                 scale: 1,
               }}
               transition={{
@@ -68,6 +66,7 @@ export const OnboardingStepper = ({
                 delay: shouldAnimate && isActive ? 0.15 : 0,
                 ease: [0.25, 0.1, 0.25, 1],
               }}
+              style={{ color: isActive ? 'rgb(255 255 255)' : 'rgb(17 24 39)' }}
             >
               {index + 1}
             </motion.div>

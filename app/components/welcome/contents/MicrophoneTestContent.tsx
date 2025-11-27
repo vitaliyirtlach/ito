@@ -1,5 +1,5 @@
 import { Button } from '@/app/components/ui/button'
-import { useEffect, useMemo, useState } from 'react'
+import { JSX, ReactNode, useEffect, useMemo, useState } from 'react'
 import { useOnboardingStore } from '@/app/store/useOnboardingStore'
 import { useSettingsStore } from '@/app/store/useSettingsStore'
 import { HelpCenterButton } from '../components/HelpCenterButton'
@@ -34,20 +34,16 @@ interface MicrophoneSelectorProps {
   selectedDeviceId?: string
   selectedMicrophoneName?: string
   onSelectionChange: (deviceId: string, name: string) => void
-  isOpen: boolean
-  setOpen: (isOpen: boolean) => void
+  children: (
+    selectedMicrophoneDisplay: string,
+    rightIcon: JSX.Element,
+  ) => ReactNode
 }
 
-export function MicrophoneSelector({
-  selectedDeviceId,
-  selectedMicrophoneName,
-  onSelectionChange,
-  isOpen,
-  setOpen,
-}: MicrophoneSelectorProps) {
-  const [availableMicrophones, setAvailableMicrophones] = useState<
-    Microphone[]
-  >([])
+const useAvailableMicrophones = () => {
+  const [availableMicrophones, setAvailableMicrophones] = useState(
+    [] as Microphone[],
+  )
 
   useEffect(() => {
     const loadMicrophones = async () => {
@@ -62,6 +58,17 @@ export function MicrophoneSelector({
     loadMicrophones()
   }, [])
 
+  return availableMicrophones
+}
+
+export function MicrophoneSelector({
+  selectedDeviceId,
+  selectedMicrophoneName,
+  onSelectionChange,
+  children,
+}: MicrophoneSelectorProps) {
+  const availableMicrophones = useAvailableMicrophones()
+  const [isOpen, setOpen] = useState(false)
   // Use saved microphone name if available, otherwise fallback to looking it up
   const selectedMicrophoneDisplay =
     selectedMicrophoneName ||
@@ -79,18 +86,10 @@ export function MicrophoneSelector({
   return (
     <DropdownMenu open={isOpen} onOpenChange={setOpen}>
       <DropdownMenuTrigger className="outline-none">
-        <Button
-          variant="outline"
-          className="!bg-background font-normal w-full justify-between"
-          type="button"
-          onClick={() => setOpen(true)}
-        >
-          <div className="flex items-center gap-2">
-            <MicIcon className="text-muted-foreground" />
-            {selectedMicrophoneDisplay || 'Select Microphone'}
-          </div>
-          <RightIcon className="text-muted-foreground" />
-        </Button>
+        {children(
+          selectedMicrophoneDisplay,
+          <RightIcon className="text-muted-foreground" />,
+        )}
       </DropdownMenuTrigger>
       <DropdownMenuContent className="border-border w-[var(--radix-dropdown-menu-trigger-width)]">
         {availableMicrophones.map(mic => {
@@ -180,16 +179,8 @@ function MicrophoneBars({ volume }) {
   )
 }
 
-export default function MicrophoneTestContent() {
-  const { incrementOnboardingStep, decrementOnboardingStep } =
-    useOnboardingStore()
-  const { microphoneDeviceId, microphoneName, setMicrophoneDeviceId } =
-    useSettingsStore()
-  const [isOpen, setOpen] = useState(false)
+const useVolume = () => {
   const [volume, setVolume] = useState(0)
-  const [smoothedVolume, setSmoothedVolume] = useState(0)
-
-  // This effect listens for volume updates from the main process
   useEffect(() => {
     const unsubscribe = window.api.on('volume-update', (newVolume: number) => {
       setVolume(newVolume)
@@ -199,7 +190,19 @@ export default function MicrophoneTestContent() {
     return () => {
       unsubscribe()
     }
-  }, []) // Runs only once on mount
+  }, [])
+
+  return volume
+}
+
+export default function MicrophoneTestContent() {
+  const { incrementOnboardingStep, decrementOnboardingStep } =
+    useOnboardingStore()
+  const { microphoneDeviceId, microphoneName, setMicrophoneDeviceId } =
+    useSettingsStore()
+  const [isOpen, setOpen] = useState(false)
+  const volume = useVolume()
+  const [smoothedVolume, setSmoothedVolume] = useState(0)
 
   // This effect manages the "test" recording lifecycle.
   // It starts recording when a device is selected and stops when the component unmounts.
@@ -253,12 +256,24 @@ export default function MicrophoneTestContent() {
             Do the bars move when you speak?
           </h3>
           <MicrophoneSelector
-            isOpen={isOpen}
-            setOpen={setOpen}
             selectedDeviceId={microphoneDeviceId}
             selectedMicrophoneName={microphoneName}
             onSelectionChange={handleMicrophoneChange}
-          />
+          >
+            {(selectedMicrophoneDisplay, rightIcon) => (
+              <Button
+                variant="outline"
+                className="!bg-background font-normal w-full justify-between"
+                type="button"
+              >
+                <div className="flex items-center gap-2">
+                  <MicIcon className="text-muted-foreground" />
+                  {selectedMicrophoneDisplay || 'Select Microphone'}
+                </div>
+                {rightIcon}
+              </Button>
+            )}
+          </MicrophoneSelector>
           <MicrophoneBars volume={smoothedVolume} />
           <div className="w-full h-px bg-border" />
           <div className="flex items-center justify-center gap-2">
@@ -279,13 +294,20 @@ export default function MicrophoneTestContent() {
             >
               Yes, continue
             </Button>
-            <Button
-              variant="outline"
-              onClick={() => setOpen(true)}
-              className="h-10 rounded-full w-54 !bg-background"
+            <MicrophoneSelector
+              selectedDeviceId={microphoneDeviceId}
+              selectedMicrophoneName={microphoneName}
+              onSelectionChange={handleMicrophoneChange}
             >
-              No, change microphone
-            </Button>
+              {() => (
+                <Button
+                  variant="outline"
+                  className="h-10 rounded-full w-54 !bg-background"
+                >
+                  No, change microphone
+                </Button>
+              )}
+            </MicrophoneSelector>
           </motion.div>
           <HelpCenterButton />
         </div>

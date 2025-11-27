@@ -39,7 +39,13 @@ export default function ReferralContent() {
           title="Let’s Begin"
           subtitle="Tell Us Where You Found Ito."
           leftSide={<BackButton onClick={decrementOnboardingStep} />}
-          rightSide={<OnboardingStepper title="Welcome!" index={0} />}
+          rightSide={
+            <OnboardingStepper
+              shouldAnimate={false}
+              title="Welcome!"
+              index={0}
+            />
+          }
         />
         <motion.div
           {...opacityAnimations}

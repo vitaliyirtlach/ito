@@ -82,7 +82,7 @@ export default function WelcomeKit() {
     <AnimatePresence mode="wait">
       {CurrentComponent && (
         <motion.div
-          key={onboardingStep}
+          key={onboardingStep > 2 ? onboardingStep : 'signin'}
           className="w-screen h-screen"
           style={style}
         >

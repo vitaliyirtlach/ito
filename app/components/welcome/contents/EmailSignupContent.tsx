@@ -78,7 +78,7 @@ export default function EmailSignupContent({
     <OnboardingScreenContainer className="pt-12 px-4 pb-4">
       <OnboardingStepCard>
         <OnboardingStepHeader
-          title="Create Your Email"
+          title="Create Your Account"
           subtitle="Quick and easy setup"
           leftSide={<BackButton onClick={onBack} />}
         />

@@ -98,7 +98,7 @@ export default function CheckEmailContent({
     <OnboardingScreenContainer className="pt-12 px-4 pb-4">
       <OnboardingStepCard>
         <OnboardingStepHeader
-          title="Create Your Email"
+          title="Create Your Account"
           subtitle="Check your inbox"
           leftSide={<ItoIcon className="size-6" />}
         />
